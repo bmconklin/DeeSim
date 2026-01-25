@@ -21,6 +21,14 @@ An AI-powered Dungeon Master that runs locally on your machine, connects to Slac
 ### Path A: Local / MCP (Offline-Capable)
 *Best for solo testing or using with a local AI client (Claude Desktop, Gemini, etc).*
 
+0.  **Install Local Brain (Ollama)**:
+    *(Skip if you already have it)*
+    ```bash
+    curl -fsSL https://ollama.com/install.sh | sh
+    ollama serve &      # Start the server
+    ollama pull llama3  # Download the brain (4GB)
+    ```
+
 1.  **Clone & Install**:
     ```bash
     git clone https://github.com/yourusername/agentic-dm.git
@@ -66,6 +74,20 @@ The bot uses the **Gemini 1.5 Pro** model. You need an API Key, but you **do not
    ```bash
    GOOGLE_API_KEY=AIzaSy...
    ```
+   ```
+
+### 🧠 Claude (Anthropic)
+You can also use **Claude 3.5 Sonnet** as the brain.
+1. Get an API Key from [Anthropic Console](https://console.anthropic.com/).
+2. Add it to your `.env` file:
+   ```bash
+   ANTHROPIC_API_KEY=sk-ant-api03...
+   ```
+3. **Priority System**: The bot checks keys in this order:
+   - `GOOGLE_API_KEY` (Gemini) -> **Default if present.**
+   - `ANTHROPIC_API_KEY` (Claude) -> Used if Google key is missing or commented out.
+   - `FORCE_CLAUDE=1` -> Set this in `.env` to override the priority and force Claude.
+   - No Keys -> Falls back to **Local (Ollama)**.
 
 ## Admin Commands
 As the Admin, you can manage who joins the game dynamically:

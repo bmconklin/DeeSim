@@ -7,6 +7,7 @@ from typing import List, Dict, Any, Optional, get_type_hints
 # Constants
 OLLAMA_DEFAULT_URL = "http://localhost:11434/api/chat"
 DEFAULT_LOCAL_MODEL = "llama3"
+DEFAULT_CLAUDE_MODEL = "claude-3-5-sonnet-20240620"
 
 def python_type_to_json_type(py_type):
     """Maps Python types to JSON schema types."""
@@ -16,7 +17,7 @@ def python_type_to_json_type(py_type):
     if py_type == bool: return "boolean"
     if py_type == list: return "array"
     if py_type == dict: return "object"
-    # Basic fallback for Optional/Union types - simplify to string for robustness or try to extract
+    # Basic fallback for Optional/Union types
     return "string"
 
 def convert_to_ollama_tool(func):
@@ -31,7 +32,7 @@ def convert_to_ollama_tool(func):
         if param_name == 'self': continue
         
         param_type = type_hints.get(param_name, str)
-        param_desc = "Parameter" # We could parse docstrings here for better descriptions
+        param_desc = "Parameter" 
         
         properties[param_name] = {
             "type": python_type_to_json_type(param_type),
@@ -55,13 +56,26 @@ def convert_to_ollama_tool(func):
     }
     return schema
 
+def convert_to_anthropic_tool(func):
+    """Converts a Python function to Anthropic tool definition."""
+    # Anthropic uses nearly identical schema to OpenAI now, but strictly requires input_schema
+    # Structure: { "name": "...", "description": "...", "input_schema": { ... } }
+    
+    ollama_schema = convert_to_ollama_tool(func)["function"]
+    
+    return {
+        "name": ollama_schema["name"],
+        "description": ollama_schema["description"],
+        "input_schema": ollama_schema["parameters"]
+    }
+
 class LocalChatSession:
     """
-    A compatible wrapper for Ollama/Local LLM that mimics google.genai.chats.Chat
+    A compatible wrapper for Ollama/Local LLM.
     """
     def __init__(self, model: str, history: List[Dict], system_instruction: str, tools: List[Any]):
         self.model = model
-        self.history = history if history else [] # Format: [{"role": "user", "parts": ["text"]}, ...]
+        self.history = history if history else [] 
         self.system_instruction = system_instruction
         self.api_url = os.environ.get("OLLAMA_HOST", OLLAMA_DEFAULT_URL)
         
@@ -75,7 +89,6 @@ class LocalChatSession:
             self.context_window.append({"role": "system", "content": self.system_instruction})
             
         for msg in self.history:
-             # Basic conversion
              role = msg.get("role", "user")
              if role == "model": role = "assistant"
              
@@ -89,9 +102,6 @@ class LocalChatSession:
              self.context_window.append({"role": role, "content": content})
 
     def send_message(self, content_parts: List[Any], max_turns=5) -> Any:
-        """
-        Sends a message to the local LLM and handles tool execution loop.
-        """
         # 1. Parse Input
         user_text = ""
         for part in content_parts:
@@ -99,7 +109,7 @@ class LocalChatSession:
                 user_text += part + "\n"
             
         self.context_window.append({"role": "user", "content": user_text})
-        self.history.append({"role": "user", "parts": [user_text]}) # Keep synced
+        self.history.append({"role": "user", "parts": [user_text]}) 
         
         current_turn = 0
         final_ai_text = ""
@@ -112,7 +122,7 @@ class LocalChatSession:
                 "model": self.model,
                 "messages": self.context_window,
                 "stream": False,
-                "tools": self.ollama_tools # Attach tools
+                "tools": self.ollama_tools
             }
             
             try:
@@ -125,14 +135,13 @@ class LocalChatSession:
                 ai_text = message.get("content", "")
                 tool_calls = message.get("tool_calls", [])
                 
-                # If content exists, capture it (Model might think aloud before calling tool)
                 if ai_text:
-                    final_ai_text = ai_text # Update final text
+                    final_ai_text = ai_text 
                     print(f"🤖 AI Thought: {ai_text[:50]}...")
                 
                 # 3. Handle Tool Calls
                 if tool_calls:
-                    self.context_window.append(message) # Add the assistant's request to history
+                    self.context_window.append(message) 
                     
                     for tool_call in tool_calls:
                         func_name = tool_call.get("function", {}).get("name")
@@ -143,7 +152,6 @@ class LocalChatSession:
                         if func_name in self.tool_map:
                             try:
                                 func = self.tool_map[func_name]
-                                # Execute Python Function
                                 result = func(**args)
                                 tool_output = str(result)
                             except Exception as e:
@@ -153,18 +161,15 @@ class LocalChatSession:
                             
                         print(f"   -> Result: {tool_output[:50]}...")
                         
-                        # Add Result to History
                         self.context_window.append({
                             "role": "tool",
                             "name": func_name,
                             "content": tool_output
                         })
                     
-                    # Continue Loop -> Send tool outputs back to LLM
                     continue
                 
                 else:
-                    # No tools, just text response. We are done.
                     self.context_window.append({"role": "assistant", "content": ai_text})
                     self.history.append({"role": "model", "parts": [ai_text]})
                     
@@ -177,6 +182,134 @@ class LocalChatSession:
                 return MockResponse(f"Local LLM Error: {e}")
                 
         return MockResponse("Max turns reached without final response.")
+
+    def get_history(self):
+        return self.history
+
+
+class ClaudeChatSession:
+    """
+    Wrapper for Anthropic's Claude API.
+    """
+    def __init__(self, api_key: str, model_name: str, history: List[Dict], tools: List[Any], system_instruction: str):
+        import anthropic
+        self.client = anthropic.Anthropic(api_key=api_key)
+        self.model = model_name or DEFAULT_CLAUDE_MODEL
+        self.system = system_instruction
+        self.history = history if history else []
+        
+        self.tool_map = {f.__name__: f for f in tools}
+        self.claude_tools = [convert_to_anthropic_tool(f) for f in tools]
+        
+        # Normalize History for Claude
+        # Claude strictly alternates User/Assistant. 
+        # We need to ensure valid conversation structure.
+        self.messages = []
+        for msg in self.history:
+             role = msg.get("role", "user")
+             if role == "model": role = "assistant"
+             
+             parts = msg.get("parts", [])
+             content = ""
+             if isinstance(parts, list):
+                 content = " ".join([str(p) for p in parts])
+             else:
+                 content = str(parts)
+            
+             self.messages.append({"role": role, "content": content})
+
+
+    def send_message(self, content_parts: List[Any], max_turns=10) -> Any:
+        # 1. Parse Input
+        user_text = ""
+        for part in content_parts:
+            if isinstance(part, str):
+                user_text += part + "\n"
+        
+        self.messages.append({"role": "user", "content": user_text})
+        self.history.append({"role": "user", "parts": [user_text]})
+        
+        current_turn = 0
+        final_text = ""
+        
+        while current_turn < max_turns:
+            current_turn += 1
+            print(f"📡 Sending to Claude ({self.model})... [Turn {current_turn}]")
+            
+            try:
+                response = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=2048,
+                    system=self.system,
+                    messages=self.messages,
+                    tools=self.claude_tools
+                )
+            except Exception as e:
+                return type('MockResponse', (object,), {"text": f"Claude Error: {e}"})()
+
+            # Process Response
+            content_blocks = response.content
+            
+            # Helper to append assistant response to our message list in correct format
+            # Claude expects the *exact* list of blocks returned for correct history
+            self.messages.append({
+                "role": "assistant",
+                "content": content_blocks
+            })
+            
+            tool_results = []
+            has_tool_use = False
+            
+            text_part = ""
+            
+            for block in content_blocks:
+                if block.type == "text":
+                    print(f"🤖 Claude Thought: {block.text[:50]}...")
+                    text_part += block.text
+                    final_text += block.text
+                
+                elif block.type == "tool_use":
+                    has_tool_use = True
+                    func_name = block.name
+                    args = block.input
+                    tool_use_id = block.id
+                    
+                    print(f"🛠️ Tool Call: {func_name}({args})")
+                    
+                    if func_name in self.tool_map:
+                        try:
+                            func = self.tool_map[func_name]
+                            result = func(**args)
+                            tool_output = str(result)
+                        except Exception as e:
+                            tool_output = f"Error executing {func_name}: {e}"
+                    else:
+                        tool_output = f"Error: Tool {func_name} not found."
+                        
+                    print(f"   -> Result: {tool_output[:50]}...")
+                    
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": tool_use_id,
+                        "content": tool_output
+                    })
+            
+            if has_tool_use:
+                # Add tool results to conversation and loop
+                self.messages.append({
+                    "role": "user",
+                    "content": tool_results
+                })
+                # Loop continues
+            else:
+                # Done
+                self.history.append({"role": "model", "parts": [final_text]})
+                class MockResponse:
+                    def __init__(self, text):
+                        self.text = text
+                return MockResponse(final_text)
+
+        return type('MockResponse', (object,), {"text": "Max turns reached."})()
 
     def get_history(self):
         return self.history
@@ -212,14 +345,21 @@ class GoogleChatSession:
 
 def get_chat_session(model_name: str, history: List[Dict], tools: List[Any], system_instruction: str):
     """
-    Factory to return either a Google Chat or a Local Chat.
+    Factory to return either a Google Chat, Claude Chat, or a Local Chat.
     """
     google_key = os.environ.get("GOOGLE_API_KEY")
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
     
-    if google_key:
+    if google_key and not os.environ.get("FORCE_CLAUDE"): # Optional override
         return GoogleChatSession(google_key, model_name, history, tools, system_instruction)
+    
+    elif anthropic_key:
+        claude_model = os.environ.get("CLAUDE_MODEL_NAME", DEFAULT_CLAUDE_MODEL)
+        print(f"🧠 ANTHROPIC_API_KEY found. Switching to Claude: {claude_model}")
+        return ClaudeChatSession(anthropic_key, claude_model, history, tools, system_instruction)
+        
     else:
         # Use Local LLM
         local_model = os.environ.get("LOCAL_MODEL_NAME", DEFAULT_LOCAL_MODEL)
-        print(f"🔌 GOOGLE_API_KEY not found. Switching to Local LLM: {local_model}")
+        print(f"🔌 No Cloud Keys found. Switching to Local LLM: {local_model}")
         return LocalChatSession(local_model, history, system_instruction, tools)

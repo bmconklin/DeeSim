@@ -17,7 +17,7 @@ fi
 source venv/bin/activate
 
 echo -e "${GREEN}Installing Slack and Google AI libraries...${NC}"
-pip install slack_bolt google-genai python-dotenv requests
+pip install slack_bolt google-genai mdutils fantasynames anthropicnv requests
 
 echo -e "${BLUE}Setup complete.${NC}"
 echo "You can now run the bot with: python3 src/bot.py"

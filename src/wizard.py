@@ -100,6 +100,57 @@ def generate_client_config(server_script_path):
         with open("mcp_config.json", "w") as f:
             f.write(config_json)
 
+def get_setup_step_prompt(step):
+    if step == 0:
+        return """
+        [SETUP MODE: STEP 1 of 5 - INTRO & SETTING]
+        Your Goal: Introduce yourself and establish the Campaign Setting.
+        1. Tell the players you are monitoring chat but will only respond when tagged.
+        2. Ask them to discuss what type of campaign they want (High Fantasy, Sci-Fi, Horror, etc.).
+        3. Explain they should Chat amongst themselves, then tag you (@DeeSim) with the final decision.
+        4. When they provide the summary, acknowledge it and CALL `complete_setup_step()`.
+        """
+    elif step == 1:
+        return """
+        [SETUP MODE: STEP 2 of 5 - CAMPAIGN DURATION]
+        Your Goal: Establish the Scope and Pacing.
+        1. Ask the players to define the length of this adventure:
+           - One-Shot (Single session, fast pacing)
+           - Limited Series (2-4 sessions)
+           - Full Campaign (Long term)
+           - Endless/West Marches
+        2. Note their preference.
+        3. CALL `complete_setup_step()`.
+        """
+    elif step == 2:
+        return """
+        [SETUP MODE: STEP 3 of 5 - ROSTER]
+        Your Goal: Confirm the Player Roster.
+        1. Ask one player to tag all participants (including themselves) so you know who is playing.
+        2. Remind them this isn't fixed; players can join/leave later.
+        3. Players should use command `!iam <Name>` to register if they haven't.
+        4. When the roster seems settled, CALL `complete_setup_step()`.
+        """
+    elif step == 3:
+        return """
+        [SETUP MODE: STEP 4 of 5 - CHARACTER SHEEETS]
+        Your Goal: Collect Character Data.
+        1. Ask EACH player to provide their: Class, Level, Name, Race, Background, and Stats (STR/DEX/etc).
+        2. Request a brief backstory or playstyle preference.
+        3. YOU MUST call `submit_character_sheet(name, details)` for EACH player as they provide data.
+        4. When all players are recorded, CALL `complete_setup_step()`.
+        """
+    elif step == 4:
+        return """
+        [SETUP MODE: STEP 5 of 5 - DICE PREFERENCE]
+        Your Goal: Establish Dice Rolling Etiquette.
+        1. Ask if they prefer to roll real physical dice (Trust System) or if they want YOU (the Bot) to roll for them.
+        2. Note their preference.
+        3. CALL `complete_setup_step()` to finish setup and start the game!
+        """
+    else:
+        return "" # Setup complete, normal play.
+
 def main():
     clear_screen()
     campaign_name, campaign_dir = create_campaign()
@@ -135,8 +186,13 @@ CORE RULE: DO NOT Hallucinate dice rolls or rules.
 
 SESSION MANAGEMENT:
 - The campaign is divided into sessions.
-- Use `start_new_session(summary)` when the player agrees to end the current session.
-- Use `start_new_session(summary)` when the player agrees to end the current session.
+- AT START OF SESSION:
+  - ALWAYS ask: "Does anyone have a hard cutoff time today?"
+  - If yes, note the time and help timebox the session to finish/pause before that limit.
+- AT END OF SESSION:
+  - YOU MUST NEVER initiate the end of the session yourself (e.g. "That's all for today").
+  - ALWAYS ask the players: "Are you ready to wrap up, or do you want to keep going?"
+  - Use `start_new_session(summary)` ONLY when the player explicitly agrees to end.
 - PERSISTENT FACTS are stored in `world_info.md`. You should update this file (via users request or manual edit guidance) for major details like NPC names or locations that must stay consistent.
 - MEMORY RETRIEVAL: You have a tool `read_campaign_log(log_type)`.
   - Use this if you need to recall details from previous sessions ('session'), secret DM notes ('secrets'), or world facts ('world').

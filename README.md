@@ -55,6 +55,18 @@ An AI-powered Dungeon Master that runs locally on your machine, connects to Slac
     python3 src/bot.py
     ```
 
+### 🔑 API Key (Google AI Studio)
+The bot uses the **Gemini 1.5 Pro** model. You need an API Key, but you **do not** need to pay.
+1. Go to [Google AI Studio](https://aistudio.google.com/app/apikey).
+2. Click **Create API Key** -> **Create API key in a new project**.
+3. **Note on Billing**: You may see references to "Pay as you go" or Google Cloud projects.
+    - The **Free Tier** (15 requests/min) is applied automatically to new keys.
+    - You will **not** be charged unless you explicitly enable a paid billing account in the Google Cloud Console for that specific project.
+4. Copy the key (starts with `AIza...`) and place it in your `.env` file:
+   ```bash
+   GOOGLE_API_KEY=AIzaSy...
+   ```
+
 ## Admin Commands
 As the Admin, you can manage who joins the game dynamically:
 - `!admin allow @user`: Adds a user to the allowed list.

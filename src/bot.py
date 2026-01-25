@@ -555,7 +555,9 @@ def handle_app_mentions(body, say, logger):
         try:
             history_snapshot = []
             for msg in chat.get_history():
-                if hasattr(msg, "model_dump"):
+                if isinstance(msg, dict):
+                     history_snapshot.append(msg)
+                elif hasattr(msg, "model_dump"):
                      history_snapshot.append(msg.model_dump(mode='json'))
                 elif hasattr(msg, "to_dict"):
                      history_snapshot.append(msg.to_dict())
@@ -620,7 +622,9 @@ def handle_message_events(message, say, logger):
             try:
                 history_snapshot = []
                 for msg in chat.get_history():
-                    if hasattr(msg, "model_dump"):
+                    if isinstance(msg, dict):
+                         history_snapshot.append(msg)
+                    elif hasattr(msg, "model_dump"):
                          history_snapshot.append(msg.model_dump(mode='json'))
                     elif hasattr(msg, "to_dict"):
                          history_snapshot.append(msg.to_dict())

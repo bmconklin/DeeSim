@@ -25,6 +25,7 @@ This guide allows you to run your Agentic DM as a Slack bot user (`@DungeonMaste
    - `chat:write` (Speak back)
    - `channels:history` (Read context if needed)
    - `files:read` (Download images/maps)
+   - `files:write` (Upload generated images)
 4. Scroll up and click **Install to Workspace**.
 5. **Copy the `xoxb-...` token**. This is your `SLACK_BOT_TOKEN`.
 

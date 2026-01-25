@@ -119,5 +119,8 @@ The bot is designed to be **Offline First**, with optional Cloud enhancements.
 | **Session Summary** | 🟡 | **Manual**: Accepts `manual_summary` from Client instead of auto-generating. |
 | **Image Generation** | 🔴 | **Disabled**: Falls back to vivid text descriptions. |
 
+## Legal
+This project is unofficial Fan Content permitted under the Fan Content Policy. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC.
+
 ## License
 MIT

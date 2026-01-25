@@ -319,12 +319,17 @@ class GoogleChatSession:
     """
     A wrapper to keep the Google Client alive alongside the Chat Session.
     """
-    def __init__(self, api_key: str, model_name: str, history: List[Dict], tools: List[Any], system_instruction: str):
+    def __init__(self, api_key: str, model_name: str, history: List[Dict], tools: List[Any], system_instruction: str, vertex_project: str = None, vertex_location: str = "us-central1"):
         # Import lazily to avoid heavy deps if running local-only
         import google.genai as genai
         from google.genai import types
         
-        self.client = genai.Client(api_key=api_key)
+        if vertex_project:
+            print(f"☁️ Connecting to Vertex AI (Project: {vertex_project}, Loc: {vertex_location})")
+            self.client = genai.Client(vertexai=True, project=vertex_project, location=vertex_location)
+        else:
+            self.client = genai.Client(api_key=api_key)
+            
         self.chat = self.client.chats.create(
             model=model_name,
             history=history,
@@ -349,17 +354,28 @@ def get_chat_session(model_name: str, history: List[Dict], tools: List[Any], sys
     """
     google_key = os.environ.get("GOOGLE_API_KEY")
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+    vertex_project = os.environ.get("GOOGLE_VERTEX_PROJECT") # Triggers ADC/System Auth
     
-    if google_key and not os.environ.get("FORCE_CLAUDE"): # Optional override
-        return GoogleChatSession(google_key, model_name, history, tools, system_instruction)
+    # Priority 1: Force Claude
+    if os.environ.get("FORCE_CLAUDE") and anthropic_key:
+        claude_model = os.environ.get("CLAUDE_MODEL_NAME", DEFAULT_CLAUDE_MODEL)
+        print(f"🧠 FORCE_CLAUDE set. Switching to Claude: {claude_model}")
+        return ClaudeChatSession(anthropic_key, claude_model, history, tools, system_instruction)
+
+    # Priority 2: Google (Key OR Vertex)
+    if google_key or vertex_project:
+        vertex_loc = os.environ.get("GOOGLE_VERTEX_LOCATION", "us-central1")
+        return GoogleChatSession(google_key, model_name, history, tools, system_instruction, vertex_project, vertex_loc)
     
+    # Priority 3: Claude (if no Google)
     elif anthropic_key:
         claude_model = os.environ.get("CLAUDE_MODEL_NAME", DEFAULT_CLAUDE_MODEL)
         print(f"🧠 ANTHROPIC_API_KEY found. Switching to Claude: {claude_model}")
         return ClaudeChatSession(anthropic_key, claude_model, history, tools, system_instruction)
         
+    # Priority 4: Local
     else:
         # Use Local LLM
         local_model = os.environ.get("LOCAL_MODEL_NAME", DEFAULT_LOCAL_MODEL)
-        print(f"🔌 No Cloud Keys found. Switching to Local LLM: {local_model}")
+        print(f"🔌 No Cloud Keys/Projects found. Switching to Local LLM: {local_model}")
         return LocalChatSession(local_model, history, system_instruction, tools)

@@ -1,0 +1,17 @@
+# Dependencies
+venv/
+__pycache__/
+*.pyc
+
+# Secrets (Important!)
+.env
+claude_desktop_config.json
+mcp_config.json
+secrets.env
+
+# Campaign Data (Don't commit active games)
+campaigns/
+*.log
+
+# OS
+.DS_Store

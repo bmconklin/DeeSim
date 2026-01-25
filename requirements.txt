@@ -1,0 +1,7 @@
+slack_bolt
+google-genai
+mdutils
+fantasynames
+anthropic
+requests
+python-dotenv

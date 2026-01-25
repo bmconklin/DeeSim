@@ -13,5 +13,8 @@ secrets.env
 campaigns/
 *.log
 
+# Cache & Temporary
+.dnd_cache/
+
 # OS
 .DS_Store

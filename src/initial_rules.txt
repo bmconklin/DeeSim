@@ -1,0 +1,42 @@
+# Basic 5th Edition SRD Rules Reference
+(Simplified for demonstration purposes)
+
+## Ability Checks
+An ability check tests a character's or monster's innate talent and training in an effort to overcome a challenge. The DM calls for an ability check when a character or monster attempts an action (other than an attack) that has a chance of failure. When the outcome is uncertain, the dice determine the results.
+The DM sets a Difficulty Class (DC) for the check.
+Typical DCs:
+- Very Easy: 5
+- Easy: 10
+- Medium: 15
+- Hard: 20
+- Very Hard: 25
+- Nearly Impossible: 30
+
+## Combat
+### The Order of Combat
+1. Determine surprise.
+2. Establish positions.
+3. Roll initiative.
+4. Take turns.
+5. Begin the next round.
+
+### Actions in Combat
+- **Attack**: Make a melee or ranged attack.
+- **Cast a Spell**: Cast a spell with a casting time of 1 action.
+- **Dash**: Gain extra movement for the turn.
+- **Disengage**: Movement doesn't provoke opportunity attacks.
+- **Dodge**: Attacks against you have disadvantage; your DEX saves have advantage.
+- **Help**: Give an ally advantage on their next ability check or attack roll.
+- **Hide**: Make a Stealth check to become hidden.
+- **Ready**: Prepare an action to take later.
+- **Search**: Devote your attention to finding something.
+- **Use an Object**: Interact with an object.
+
+## Rest
+### Short Rest
+A period of downtime, at least 1 hour long, during which a character does nothing more strenuous than eating, drinking, reading, and tending to wounds.
+A character can spend one or more Hit Dice at the end of a short rest, up to the character's maximum number of Hit Dice, which is equal to the character's level.
+
+### Long Rest
+A period of extended downtime, at least 8 hours long, during which a character sleeps for at least 6 hours and performs no more than 2 hours of light activity, such as reading, talking, eating, or standing watch. If the rest is interrupted by a period of strenuous activity—at least 1 hour of walking, fighting, casting spells, or similar adventuring activity—the characters must begin the rest again to gain any benefit from it.
+At the end of a long rest, a character regains all lost hit points. The character also regains spent Hit Dice, up to a number of dice equal to half of the character's total number of them (minimum of one die).

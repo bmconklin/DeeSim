@@ -113,6 +113,7 @@ As the Admin, you can manage who joins the game dynamically:
 
 ## Documentation
 - [Slack Setup Guide](slack_walkthrough.md): How to get the tokens.
+- [Discord Setup Guide](discord_walkthrough.md): How to get the tokens.
 - [Client Connection Guide](CLIENTS.md): Using Claude Desktop & Native CLI.
 - [Player Guide](walkthrough.md): How to use the bot commands.
 

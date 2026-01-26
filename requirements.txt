@@ -6,3 +6,4 @@ anthropic
 requests
 python-dotenv
 prompt_toolkit
+discord.py

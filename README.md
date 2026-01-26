@@ -60,7 +60,23 @@ An AI-powered Dungeon Master that runs locally on your machine, connects to Slac
     *   `GOOGLE_API_KEY` (Optional but Recommended)
 3.  **Run the Bot**:
     ```bash
-    python3 src/bot.py
+    ./play.sh -platform=slack
+    ```
+
+### Path C: Discord Bot (Online)
+*Best for playing with friends in a Discord server.*
+
+1.  **Install & Configure**:
+    Follow steps in Path A, then copy the secrets template:
+    ```bash
+    cp .env.example .env
+    ```
+2.  **Add Tokens**:
+    *   `DISCORD_BOT_TOKEN` (From Discord Developer Portal)
+    *   `GOOGLE_API_KEY` (Optional but Recommended)
+3.  **Run the Bot**:
+    ```bash
+    ./play.sh -platform=discord
     ```
 
 ### 🔑 API Key (Google AI Studio)

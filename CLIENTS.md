@@ -12,9 +12,19 @@ Currently, there are two ways to play:
 
 Run this command:
 ```bash
-python3 src/play.py [campaign_name]
+./play.sh [options]
 ```
-*   **Campaign Selection**: Pass the folder name (e.g. `python3 src/play.py new_adventure`) to switch campaigns.
+*   **Options**:
+    *   `-platform=[local|slack|discord]` (Default: local)
+    *   `-campaign=[name]` (Default: from .env)
+*   **Examples**:
+    *   `./play.sh` (Runs local default)
+    *   `./play.sh -campaign=oneshot` (Runs local 'oneshot')
+    *   `./play.sh -platform=discord` (Runs Discord bot)
+*   **Controls**:
+    *   **Enter**: Submit message.
+    *   **Alt+Enter** (or Esc+Enter): Insert new line.
+    *   **Ctrl+D**: Quit.
 *   **Requirements**: 
     *   If using Local LLM (Ollama), you **MUST** use a model that supports Tool Calling (e.g. `llama3.1` or `gemma2`). Base `llama3` will fail.
     *   Set `LOCAL_MODEL_NAME=llama3.1` in your `.env`.
@@ -52,7 +62,18 @@ This works because Claude Desktop is an **MCP Client**. It knows how to connect 
 
 ---
 
-## Option C: Antigravity / Agentic IDEs 🤖
+## Option C: Discord Client (Online)
+**Best for:** Group play, Voice chat, Mobile users.
+**Pros:** Polished mobile app, easy file uploads.
+**Cons:** Requires `DISCORD_BOT_TOKEN`.
+
+1.  **Invite Bot**: Create an application in the Discord Developer Portal and invite the bot to your server.
+2.  **Run**: `python3 src/discord_bot.py`.
+3.  **Play**: Tag the bot `@AgenticDM` or DM it directly to start playing.
+
+---
+
+## Option D: Antigravity / Agentic IDEs 🤖
 **Best for:** Developers hacking on the bot while playing.
 **Pros:** seamless integration with code changes.
 **Cons:** Requires an MCP-enabled IDE environment.

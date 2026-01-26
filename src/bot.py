@@ -553,15 +553,10 @@ def handle_app_mentions(body, say, logger):
         say(response.text)
         
         try:
-            history_snapshot = []
-            for msg in chat.get_history():
-                if isinstance(msg, dict):
-                     history_snapshot.append(msg)
-                elif hasattr(msg, "model_dump"):
-                     history_snapshot.append(msg.model_dump(mode='json'))
-                elif hasattr(msg, "to_dict"):
-                     history_snapshot.append(msg.to_dict())
-            dm_utils.save_chat_snapshot(history_snapshot)
+        try:
+            dm_utils.save_chat_snapshot(chat.get_history())
+        except Exception as h_err:
+            logger.error(f"Failed to save history: {h_err}")
         except Exception as h_err:
             logger.error(f"Failed to save history: {h_err}")
             
@@ -620,16 +615,9 @@ def handle_message_events(message, say, logger):
             say(response.text)
             
             try:
-                history_snapshot = []
-                for msg in chat.get_history():
-                    if isinstance(msg, dict):
-                         history_snapshot.append(msg)
-                    elif hasattr(msg, "model_dump"):
-                         history_snapshot.append(msg.model_dump(mode='json'))
-                    elif hasattr(msg, "to_dict"):
-                         history_snapshot.append(msg.to_dict())
-                
-                dm_utils.save_chat_snapshot(history_snapshot)
+                dm_utils.save_chat_snapshot(chat.get_history())
+            except Exception as h_err:
+                logger.error(f"Failed to save history: {h_err}")
             except Exception as h_err:
                 logger.error(f"Failed to save history: {h_err}")
         except Exception as e:

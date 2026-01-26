@@ -5,3 +5,4 @@ fantasynames
 anthropic
 requests
 python-dotenv
+prompt_toolkit

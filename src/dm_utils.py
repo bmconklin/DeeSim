@@ -86,8 +86,25 @@ def save_chat_snapshot(history_data: list):
     # Ensure directory exists just in case
     os.makedirs(os.path.dirname(path), exist_ok=True)
     
+    # Serialize objects if needed
+    serializable_history = []
+    for msg in history_data:
+        if isinstance(msg, dict):
+            serializable_history.append(msg)
+        elif hasattr(msg, "model_dump"):
+            serializable_history.append(msg.model_dump(mode='json'))
+        elif hasattr(msg, "to_dict"):
+            serializable_history.append(msg.to_dict())
+        else:
+            # Fallback for weird objects, try __dict__ or just str? 
+            # Better to skip or basic str to avoid crash
+            try:
+                serializable_history.append(msg.__dict__)
+            except:
+                serializable_history.append({"role": "error", "parts": [str(msg)]})
+
     # Prune history
-    clean_history = [prune_empty_fields(msg) for msg in history_data]
+    clean_history = [prune_empty_fields(msg) for msg in serializable_history]
     
     with open(path, "w") as f:
         json.dump(clean_history, f, indent=2)

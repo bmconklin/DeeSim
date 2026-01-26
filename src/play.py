@@ -114,23 +114,55 @@ def main():
         return
 
     # 5. Game Loop
+    from prompt_toolkit import PromptSession
+    from prompt_toolkit.key_binding import KeyBindings
+    
+    # Configure Keybindings
+    kb = KeyBindings()
+
+    @kb.add('enter')
+    def _(event):
+        """Submit when Enter is pressed."""
+        event.current_buffer.validate_and_handle()
+
+    @kb.add('escape', 'enter')
+    def _(event):
+        """Insert newline when Esc+Enter (Alt+Enter) is pressed."""
+        event.current_buffer.insert_text('\n')
+        
+    # Attempt Shift+Enter (May not work in all terminals)
+    # prompt_toolkit often sees Shift+Enter as just Enter
+    
+    @kb.add('c-d')
+    def _(event):
+        """Exit when Ctrl-D is pressed."""
+        print("\nExiting...")
+        sys.exit(0)
+
+    prompt_session = PromptSession(key_bindings=kb)
+
+    print(f"{YELLOW}Input Mode: Multiline enabled.{NC}")
+    print(f"{YELLOW} - Press [Enter] to SUBMIT.{NC}")
+    print(f"{YELLOW} - Press [Alt+Enter] (or Esc+Enter) for new line.{NC}")
+    
     while True:
         try:
-            user_input = input(f"{YELLOW}You > {NC}")
-        except KeyboardInterrupt:
+            # Replaces standard input()
+            user_input = prompt_session.prompt(f"You > ", multiline=True)
+        except (KeyboardInterrupt, EOFError):
             print("\nExiting...")
             break
             
         if not user_input.strip():
             continue
             
-        if user_input.lower() in ["/quit", "/exit"]:
+        if user_input.lower().strip() in ["/quit", "/exit"]:
             print("Goodbye!")
             break
             
-        if user_input.startswith("/roll "):
+        if user_input.strip().startswith("/roll "):
             # Client-side roll helper
-            expr = user_input.replace("/roll ", "")
+            expr = user_input.strip().replace("/roll ", "")
             res = dm_utils.roll_dice(expr)
             if "error" in res:
                 print(f"{RED}{res['error']}{NC}")
@@ -147,14 +179,17 @@ def main():
             # Extract text
             ai_text = ""
             # Handle different backend response types (Gemini vs Claude vs Local)
-            # Our bridge tries to normalize, but let's be safe.
+            # Handle different backend response types (Gemini vs Claude vs Local)
+            ai_text = None
             if hasattr(response, "text"):
                 ai_text = response.text
-            elif isinstance(response, dict) and "text" in response:
-                ai_text = response["text"]
-            else:
-                ai_text = str(response)
-                
+            elif isinstance(response, dict):
+                ai_text = response.get("text")
+            
+            # Fallback if text is still None (e.g. Safety Block)
+            if not ai_text:
+                ai_text = "[System: The DM is silent. (No response text returned. This usually indicates a Safety Block or an internal model error.)]"
+            
             print(f"{GREEN}DM > {ai_text}{NC}\n")
             
             # Save History (The session object updates its internal history, we need to persist it)

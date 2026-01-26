@@ -4,8 +4,11 @@ import requests
 import json
 import datetime
 import re
-import google.genai as genai
-from google.genai import types
+try:
+    import google.genai as genai
+    from google.genai import types
+except ImportError:
+    genai = None # Handle missing dependency for pure local/offline mode
 import fantasynames as fn
 
 def download_slack_file(url: str, token: str) -> bytes:

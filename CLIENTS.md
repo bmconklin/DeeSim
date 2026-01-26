@@ -12,10 +12,12 @@ Currently, there are two ways to play:
 
 Run this command:
 ```bash
-python3 src/play.py
+python3 src/play.py [campaign_name]
 ```
-*   It automatically loads your campaign.
-*   It handles authentication (see `README.md`).
+*   **Campaign Selection**: Pass the folder name (e.g. `python3 src/play.py new_adventure`) to switch campaigns.
+*   **Requirements**: 
+    *   If using Local LLM (Ollama), you **MUST** use a model that supports Tool Calling (e.g. `llama3.1` or `gemma2`). Base `llama3` will fail.
+    *   Set `LOCAL_MODEL_NAME=llama3.1` in your `.env`.
 
 ---
 

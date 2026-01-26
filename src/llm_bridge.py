@@ -9,6 +9,10 @@ OLLAMA_DEFAULT_URL = "http://localhost:11434/api/chat"
 DEFAULT_LOCAL_MODEL = "llama3"
 DEFAULT_CLAUDE_MODEL = "claude-3-5-sonnet-20240620"
 
+class MockResponse:
+    def __init__(self, text):
+        self.text = text
+
 def python_type_to_json_type(py_type):
     """Maps Python types to JSON schema types."""
     if py_type == str: return "string"
@@ -173,9 +177,6 @@ class LocalChatSession:
                     self.context_window.append({"role": "assistant", "content": ai_text})
                     self.history.append({"role": "model", "parts": [ai_text]})
                     
-                    class MockResponse:
-                        def __init__(self, text):
-                            self.text = text
                     return MockResponse(ai_text)
                     
             except Exception as e:

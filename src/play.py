@@ -4,10 +4,60 @@ import json
 from dotenv import load_dotenv
 
 # Load Env
+# Load Env
 load_dotenv()
 
-from bot import tools_list, get_chat_session, DEBUG_MODE
+# --- CAMPAIGN SELECTION (Before Imports) ---
+if len(sys.argv) > 1:
+    arg_campaign = sys.argv[1]
+    # Check if absolute path or name
+    if os.path.isabs(arg_campaign):
+        target_path = arg_campaign
+    else:
+        # Assume it's in the 'campaigns' folder
+        root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        target_path = os.path.join(root_dir, "campaigns", arg_campaign)
+        
+    if os.path.exists(target_path):
+        os.environ["DM_CAMPAIGN_ROOT"] = target_path
+        print(f"🎯 CLI Override: Loading campaign from '{target_path}'")
+    else:
+        print(f"⚠️ Warning: Campaign '{arg_campaign}' not found at {target_path}. Using default from .env")
+
+# from bot import tools_list, DEBUG_MODE # Removed to avoid Slack dependency
+from llm_bridge import get_chat_session
 import dm_utils
+import common_tools
+
+# --- Local Tool Overrides ---
+def send_dm(character_name: str, message: str) -> str:
+    """
+    Sends a PRIVATE Direct Message to a specific player.
+    (Local Mode: Prints to console effectively, or logs to secrets).
+    """
+    print(f"\n[PRIVATE MESSAGE to {character_name}]: {message}\n")
+    return f"Sent private message to {character_name}."
+
+# Construct Tools List
+tools_list = [
+    common_tools.roll_dice, 
+    common_tools.log_event, 
+    common_tools.lookup_rule, 
+    common_tools.search_dnd_rules, 
+    common_tools.verify_dnd_statement, 
+    common_tools.find_monster_by_cr, 
+    common_tools.start_new_session, 
+    common_tools.request_player_roll, 
+    common_tools.read_campaign_log,
+    send_dm, # LOCAL VERSION
+    common_tools.end_session_and_compact,
+    common_tools.update_world_info,
+    common_tools.propose_scene_image,
+    common_tools.validate_action,
+    common_tools.complete_setup_step,
+    common_tools.submit_character_sheet,
+    common_tools.generate_name
+]
 
 # Colors
 GREEN = '\033[92m'

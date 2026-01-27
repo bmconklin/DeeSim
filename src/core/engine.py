@@ -1,5 +1,6 @@
 
 import os
+import time
 import datetime
 from google.genai import types
 import dm_utils
@@ -10,7 +11,9 @@ class GameEngine:
     def __init__(self, system_instruction: str, tools_list: list):
         self.system_instruction = system_instruction
         self.tools_list = tools_list
-        self.model_name = os.environ.get("MODEL_NAME", "gemini-2.5-flash")
+        provider, resolved_name = llm_bridge.resolve_model_config()
+        self.model_name = resolved_name
+        print(f"✨ [Engine] Initialized with {provider} model: {self.model_name}")
         
         # Initialize Context
         self.history = dm_utils.load_chat_snapshot()
@@ -23,7 +26,7 @@ class GameEngine:
             system_instruction=self.system_instruction
         )
 
-    def process_message(self, user_id: str, user_name: str, message_text: str, platform_id: str, attachments: list = None, channel_id: str = None) -> str:
+    def process_message(self, user_id: str, user_name: str, message_text: str, platform_id: str, attachments: list = None, channel_id: str = None, server_id: str = None) -> str:
         """
         Main Game Loop:
         1. Check Permissions
@@ -33,7 +36,7 @@ class GameEngine:
         5. Return Response Text
         """
         # 1. Permission Check
-        if not is_allowed(user_id=user_id, channel_id=channel_id):
+        if not is_allowed(user_id=user_id, channel_id=channel_id, server_id=server_id):
             return f"🔒 You are not in the Book of Allowed Heroes. Ask the DM (`!admin allow {user_id}`)."
 
         # 2. Context Injection
@@ -63,34 +66,62 @@ class GameEngine:
             setup_instructions = dm_utils.get_setup_instructions(setup_step)
             final_text = f"{setup_instructions}\n\n{final_text}"
 
-        # 3. Call LLM
-        try:
-            content = [final_text]
-            if attachments:
-                # Expect attachments to be formatted as Types.Part or similar
-                content.extend(attachments)
-                
-            response = self.chat.send_message(content)
-            
-            # 4. Save History
+        # 3. Call LLM with Retry Logic
+        max_retries = 3
+        base_delay = 2
+        
+        for attempt in range(max_retries + 1):
             try:
-                dm_utils.save_chat_snapshot(self.chat.get_history())
-            except Exception as h_err:
-                print(f"[Engine] Failed to save history: {h_err}")
+                content = [final_text]
+                if attachments:
+                    content.extend(attachments)
+                    
+                response = self.chat.send_message(content, timeout=90)
                 
-            return response.text
-            
-        except Exception as e:
-            error_str = str(e)
-            print(f"[Engine] LLM Error: {error_str}")
-            if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
-                return "⏳ The magical winds are calm (Rate Limit Exceeded). Please wait a moment and try again."
-            else:
-                return f"I encountered a magical disturbance (Error: {error_str})"
+                # 4. Save History
+                try:
+                    dm_utils.save_chat_snapshot(self.chat.get_history())
+                except Exception as h_err:
+                    print(f"[Engine] Failed to save history: {h_err}")
+                    
+                text_out = response.text
+                if not text_out:
+                    # Often means blocked content or empty response
+                    text_out = "..."
+                    
+                return text_out
 
-    def buffer_message(self, user_id: str, user_name: str, message_text: str, channel_id: str = None):
+            except Exception as e:
+                error_str = str(e)
+                print(f"[Engine] LLM Error (Attempt {attempt+1}/{max_retries+1}): {error_str}")
+                
+                # Check for 503, Overloaded, or Network/SSL Timeouts
+                error_lower = error_str.lower()
+                is_transient = (
+                    "503" in error_str or 
+                    "overloaded" in error_lower or
+                    "timed out" in error_lower or
+                    "ssl" in error_lower or
+                    "connection" in error_lower
+                )
+                
+                if is_transient and attempt < max_retries:
+                    sleep_time = base_delay * (2 ** attempt)
+                    print(f"[Engine] Retrying in {sleep_time}s...")
+                    time.sleep(sleep_time)
+                    continue
+                
+                # Final Error Handling
+                if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+                    return "⏳ The magical winds are calm (Rate Limit Exceeded). Please wait a moment and try again."
+                elif is_transient:
+                    return "😵 The spirits are overwhelmed (Model Overloaded). Please try again in a moment."
+                else:
+                    return f"I encountered a magical disturbance (Error: {error_str})"
+
+    def buffer_message(self, user_id: str, user_name: str, message_text: str, channel_id: str = None, server_id: str = None):
         """Passively buffer messages."""
-        if is_allowed(user_id, channel_id):
+        if is_allowed(user_id, channel_id, server_id):
             char_name = dm_utils.get_character_name(user_id)
             author_name = char_name if char_name != "Unknown Hero" else user_name
             dm_utils.append_to_context_buffer(author_name, message_text)

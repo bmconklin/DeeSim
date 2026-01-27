@@ -105,7 +105,8 @@ def main():
         print(f"✨ Resumed session ({len(history)} messages).")
         
     # 4. Initialize Session
-    model_name = os.environ.get("MODEL_NAME", "gemini-1.5-pro-latest")
+    provider, model_name = llm_bridge.resolve_model_config()
+    print(f"🚀 Starting session with {provider} model: {model_name}")
     
     try:
         session = get_chat_session(model_name, history, tools_list, system_instruction)

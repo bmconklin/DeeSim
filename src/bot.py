@@ -152,11 +152,12 @@ def end_session_and_compact(manual_summary: str = None) -> str:
     """
     return dm_utils.summarize_and_compact_session_logic(manual_summary)
     
-def propose_scene_image(image_description: str) -> str:
+def generate_scene_image(image_description: str) -> str:
     """
-    Propose generating an image for the current scene.
-    DO NOT generate the image directly. This just asks the user for permission.
-    Use this when describing a new location, monster, or epic moment.
+    GENERATES a visual illustration for the current scene.
+    Call this whenever the user asks for an image OR when you describe a new location.
+    
+    The system will handle the actual generation.
     
     image_description: "A dark cavern with glowing blue mushrooms and a spider web."
     """
@@ -209,7 +210,7 @@ tools_list = [
     send_dm,
     end_session_and_compact,
     update_world_info,
-    propose_scene_image,
+    generate_scene_image,
     validate_action,
     complete_setup_step, # NEW
     submit_character_sheet # NEW
@@ -437,6 +438,7 @@ def handle_message_events(message, say, logger):
     channel_type = message.get("channel_type")
     user_id = message.get("user")
     channel_id = message.get("channel")
+    server_id = message.get("team") # Slack Team ID
     text = message.get("text")
     
     # --- DM LOGIC (Active) ---
@@ -452,7 +454,8 @@ def handle_message_events(message, say, logger):
             message_text=text,
             platform_id="slack",
             attachments=image_parts,
-            channel_id=channel_id
+            channel_id=channel_id,
+            server_id=server_id
         )
         say(response_text)
         return
@@ -463,7 +466,8 @@ def handle_message_events(message, say, logger):
         user_id=user_id,
         user_name=None,
         message_text=text,
-        channel_id=channel_id
+        channel_id=channel_id,
+        server_id=server_id
     )
 
 if __name__ == "__main__":

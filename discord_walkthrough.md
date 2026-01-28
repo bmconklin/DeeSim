@@ -1,6 +1,7 @@
 # Discord Bot Setup Guide 🤖
 
-Setting up a Discord bot is simpler than Slack, but you need to enable specific "Intents" for it to read messages.
+Follow this guide to create your Agentic DM bot application in the Discord Developer Portal and connect it to your server.
+
 
 ## 1. Create Application
 1.  Go to the [Discord Developer Portal](https://discord.com/developers/applications).

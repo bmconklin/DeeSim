@@ -1,14 +1,20 @@
-# Agentic Dungeon Master 🎲 (Slackbot Edition)
+# Agentic Dungeon Master 🎲 (Multi-Platform)
 
-An AI-powered Dungeon Master that runs locally on your machine, connects to Slack, and manages a D&D 5e campaign with persistent memory, anti-hallucination dice rolling, and secret DM logs.
+
+An AI-powered Dungeon Master that runs locally on your machine, connects to **Discord**, **Slack**, or **CLI**, and manages a D&D 5e campaign with persistent memory, anti-hallucination dice rolling, and secret DM logs.
 
 ## Features
 
-### Core Engine (Local & Slack)
+### Core Engine
 - **Fair Dice**: The bot cannot fake rolls. It commits to a DC/Consequence *before* asking you to roll.
 - **Persistent Memory**: Uses local Markdown files to track the campaign.
 - **Anti-Hallucination**: Checks a local rules file before creating rulings.
 - **Offline Capable**: Core tools run without any API keys.
+
+### Discord Integration
+- **Immersive Visuals**: Auto-generates images of scenes and monsters using Google Imagen.
+- **Threaded Play**: Keeps campaign channels clean.
+- **Roleplay Mode**: Users can register character names with `!iam`.
 
 ### Slack Integration
 - **Multiplayer Interface**: Play D&D with friends in a Slack channel.

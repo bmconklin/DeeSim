@@ -9,6 +9,8 @@ An AI-powered Dungeon Master that runs locally on your machine, connects to **Di
 - **Fair Dice**: The bot cannot fake rolls. It commits to a DC/Consequence *before* asking you to roll.
 - **Persistent Memory**: Uses local Markdown files to track the campaign.
 - **Anti-Hallucination**: Checks a local rules file before creating rulings.
+- **High-Fidelity Narration**: Captures and aggregates all DM dialogue across complex turns (e.g., between dice rolls).
+- **Combat Stat Tracking**: Maintains persistent enemy HP, AC, and resource tracking in `secrets_log.md` to prevent mid-battle hallucinations.
 - **Offline Capable**: Core tools run without any API keys.
 
 ### Discord Integration
@@ -122,6 +124,7 @@ As the Admin, you can manage who joins the game dynamically:
 - [Discord Setup Guide](discord_walkthrough.md): How to get the tokens.
 - [Client Connection Guide](CLIENTS.md): Using Claude Desktop & Native CLI.
 - [Player Guide](walkthrough.md): How to use the bot commands.
+- **[New Feature Details](file:///home/verran/dev/gemini_dm/FEATURES.md)**: Deep dive into Combat Tracking and Narration logic.
 
 ## Feature Capabilities
 The bot is designed to be **Offline First**, with optional Cloud enhancements.
@@ -140,6 +143,7 @@ The bot is designed to be **Offline First**, with optional Cloud enhancements.
 | **Basic Name Gen** | 🟢 | Full functionality (Elf, Dwarf, Human, Town). |
 | **Rule Validation** | 🟡 | **Delegates**: Returns raw stats to you/Local AI to make the ruling. |
 | **Exotic Name Gen** | 🟡 | **Delegates**: Returns "Custom names require key" -> Bot invents one itself. |
+| **Combat Tracking** | 🟢 | Full functionality (Persistent Markdown state). |
 | **Session Summary** | 🟡 | **Manual**: Accepts `manual_summary` from Client instead of auto-generating. |
 | **Image Generation** | 🔴 | **Disabled**: Falls back to vivid text descriptions. |
 

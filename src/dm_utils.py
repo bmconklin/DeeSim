@@ -589,19 +589,33 @@ def extract_and_save_prompt_from_text(text: str) -> bool:
             
     return False
 
-def clear_pending_image() -> str:
+def save_image_to_campaign(image_bytes: bytes, prompt: str) -> str:
     """
-    Removes the pending prompt file.
+    Saves image bytes to the visuals/ folder in the current session.
     """
-    path = get_pending_image_path()
-    if os.path.exists(path):
-        os.remove(path)
-        return "Pending image cleared."
-    return "No pending image to clear."
+    session_dir = get_current_session_dir()
+    visuals_dir = os.path.join(session_dir, "visuals")
+    os.makedirs(visuals_dir, exist_ok=True)
+    
+    # Create safe filename
+    import re
+    safe_name = re.sub(r"[^a-zA-Z0-9 ]", "", prompt[:30]).strip().replace(" ", "_")
+    timestamp = datetime.datetime.now().strftime("%H%M%S")
+    filename = f"{timestamp}_{safe_name}.png"
+    filepath = os.path.join(visuals_dir, filename)
+    
+    try:
+        with open(filepath, "wb") as f:
+            f.write(image_bytes)
+        return filepath
+    except Exception as e:
+        print(f"DEBUG: Failed to save image to campaign: {e}")
+        return None
 
-def generate_image_from_pending() -> tuple[bytes, str]:
+def generate_image_from_pending() -> tuple[str, str]:
     """
-    Reads pending prompt, calls Imagen, returns (image_bytes, prompt_text).
+    Reads pending prompt, calls Imagen, saves result to campaign, 
+    returns (saved_filepath, prompt_text).
     Returns (None, error_message) on failure.
     """
     path = get_pending_image_path()
@@ -638,9 +652,17 @@ def generate_image_from_pending() -> tuple[bytes, str]:
         if response.generated_images:
             print("DEBUG: Image generated successfully.")
             image_bytes = response.generated_images[0].image.image_bytes
+            
+            # Save to campaign folder if possible
+            saved_path = save_image_to_campaign(image_bytes, prompt)
+            
             # Clear pending after successful generation
             os.remove(path)
-            return image_bytes, prompt
+            
+            if saved_path:
+                return saved_path, prompt
+            else:
+                return "SUCCESS_BUT_SAVE_FAILED", prompt
         else:
             print(f"DEBUG: No images in response. Response: {response}")
             return None, "No images returned from API."
@@ -769,9 +791,12 @@ def get_setup_instructions(step: int) -> str:
         2. Ask them to discuss what type of campaign they want (High Fantasy, Sci-Fi, Horror, etc.).
         3. Explain they should Chat amongst themselves, then tag you (@DeeSim) with the final decision.
         4. CRITICAL: DO NOT call `complete_setup_step()` until the players have explicitly agreed on a setting.
-        5. If they are still discussing, just acknowledge and wait.
-        6. IMPROVE THE EXPERIENCE: If the answer is vague, ask clarifying questions (e.g. "Grimdark or Noblebright?").
-        7. ONLY when you have a clear, final answer, CALL `complete_setup_step()`.
+        5. STARTING LOCATION: Once a setting is picked, you must determine the starting location. 
+           USE THE TOOL: `generate_name(race='place', count=10)` to get a large pool of options.
+           DECISION: Evaluate the results, select the name that best fits the theme (e.g., 'Winterfell' for a cold setting), and announce it as the final starting location.
+        6. If they are still discussing the setting, just acknowledge and wait.
+        7. IMPROVE THE EXPERIENCE: If the answer is vague, ask clarifying questions (e.g. "Grimdark or Noblebright?").
+        8. ONLY when you have a clear setting AND you have declared the starting location, CALL `complete_setup_step()`.
         """
     elif step == 1:
         return """
@@ -836,36 +861,146 @@ def save_character_sheet(name: str, details_text: str) -> str:
 
 # --- Name Generation Logic ---
 
-def generate_random_name(race: str = "any", gender: str = "any") -> str:
+def generate_random_name(race: str = "any", count: int = 1) -> str:
     """
-    Generates a random fantasy name using the 'fantasynames' library.
-    race: 'elf', 'dwarf', 'human', 'hobbit', 'place', or 'any'.
+    Generates random fantasy names.
+    race: 'elf', 'dwarf', 'human', 'hobbit', 'place' (towns), or 'any'.
+    count: How many names to generate.
     """
     try:
-        # Place Name Logic (Hack: Use surnames)
-        if race.lower() in ["place", "town", "city", "location"]:
-            # Human and Anglo names often have town-like suffixes (-ton, -ford, -bury)
-            full_name = fn.human() if random.random() < 0.5 else fn.anglo()
-            if " " in full_name:
-                return full_name.split(" ")[-1] # Return surname (e.g. "Kirkbury")
-            return full_name
+        names = []
+        for _ in range(max(1, min(count, 10))):
+            name = None
+            r = race.lower()
             
-        # Character Name Logic
-        if race.lower() == "elf":
-            return fn.elf()
-        elif race.lower() == "dwarf":
-            return fn.dwarf()
-        elif race.lower() == "human":
-            return fn.human()
-        elif race.lower() == "hobbit":
-            return fn.hobbit()
-        elif race.lower() == "anglo":
-            return fn.anglo()
-        elif race.lower() == "french":
-            return fn.french()
-        else:
-            # For Orcs, Goblins, Gnomes, etc. we return None 
-            # to signal the bot to generate it via LLM
-            return None
+            if r in ["place", "town", "city", "location", "village"]:
+                # Logic for town names using suffixes
+                roots = [
+                    "Oak", "Deep", "Shadow", "Gold", "High", "Stone", "River", "Green", "Winter", "Summer", 
+                    "Iron", "Black", "White", "Gray", "Storm", "Cloud", "Sun", "Moon", "Star", "Fire", 
+                    "Frost", "Mist", "Raven", "Wolf", "Dragon", "Amber", "Silver", "Night", "Dawn"
+                ]
+                suffixes = [
+                    "haven", "fell", "wood", "run", "crest", "ford", "bury", "ton", "field", "bridge", 
+                    "glen", "peak", "hold", "spire", "watch", "keep", "gate", "port", "marsh", "vale",
+                    "dale", "ridge", "point", "well", "drift", "bay", "rock", "cliff"
+                ]
+                name = f"{random.choice(roots)}{random.choice(suffixes)}"
+            elif r == "elf":
+                name = fn.elf()
+            elif r == "dwarf":
+                name = fn.dwarf()
+            elif r == "human":
+                name = fn.human()
+            elif r == "hobbit":
+                name = fn.hobbit()
+            elif r == "anglo":
+                name = fn.anglo()
+            else:
+                # Default to a mix
+                pick = random.choice([fn.human, fn.elf, fn.dwarf, fn.anglo])
+                name = pick()
+            
+            if name:
+                names.append(name)
+        
+        if not names:
+            return "No specified generator for that race. Please imagine one!"
+            
+        if len(names) == 1:
+            return names[0]
+        return ", ".join(names)
+
     except Exception as e:
         return f"NameError: {e}"
+
+def update_combat_state(entities: list) -> str:
+    """
+    Writes or updates the '## Active Combat' section in secrets_log.md.
+    entities: List of dicts, e.g. [{"name": "Goblin 1", "hp": 7, "max_hp": 7, "ac": 15, "notes": ""}]
+    """
+    _, secrets_log = get_log_paths()
+    
+    # Read existing content
+    content = ""
+    if os.path.exists(secrets_log):
+        with open(secrets_log, "r") as f:
+            content = f.read()
+            
+    # Prepare combat table
+    header = "## Active Combat\n\n| Name | HP | AC | Notes |\n| :--- | :--- | :--- | :--- |\n"
+    rows = ""
+    for e in entities:
+        hp_str = f"{e.get('hp', 0)}/{e.get('max_hp', 0)}"
+        rows += f"| {e.get('name', 'Unknown')} | {hp_str} | {e.get('ac', 0)} | {e.get('notes', '')} |\n"
+    
+    new_combat_section = header + rows + "\n"
+    
+    if "## Active Combat" in content:
+        # Replace existing section
+        import re
+        # Find everything from ## Active Combat to the next ## or end of file
+        pattern = r"## Active Combat\n.*?(?=\n##|$)"
+        updated_content = re.sub(pattern, new_combat_section.strip(), content, flags=re.DOTALL)
+    else:
+        # Append to end
+        updated_content = content.strip() + "\n\n" + new_combat_section
+        
+    with open(secrets_log, "w") as f:
+        f.write(updated_content.strip() + "\n")
+        
+    return "Combat state updated in secrets_log.md."
+
+def get_combat_state() -> str:
+    """
+    Retrieves the '## Active Combat' section from secrets_log.md.
+    """
+    _, secrets_log = get_log_paths()
+    if not os.path.exists(secrets_log):
+        return "No combat state found (secrets_log.md missing)."
+        
+    with open(secrets_log, "r") as f:
+        content = f.read()
+        
+    if "## Active Combat" not in content:
+        return "No active combat section found."
+        
+    import re
+    pattern = r"## Active Combat\n.*?(?=\n##|$)"
+    match = re.search(pattern, content, flags=re.DOTALL)
+    if match:
+        return match.group(0).strip()
+        
+    return "Failed to parse combat state."
+
+def get_system_instruction():
+    session_dir = get_current_session_dir()
+    # Check session dir first, then campaign root
+    prompt_path = os.path.join(session_dir, "system_prompt.txt")
+    if not os.path.exists(prompt_path):
+        prompt_path = os.path.join(CAMPAIGN_ROOT, "system_prompt.txt")
+        
+    base_prompt = ""
+    if os.path.exists(prompt_path):
+        with open(prompt_path, "r") as f:
+            base_prompt = f.read()
+    else:
+        base_prompt = "You are a Dungeon Master. Use the tools provided to run the game."
+
+    naming_rules = """---
+## Universal Naming Principles
+When generating names for NPCs, locations, items, or anything else:
+1. ALWAYS use the `generate_name` tool with a `count` of 5-10.
+2. Review the resulting list of names and evaluate them against the current theme and tone of the campaign.
+3. Make the final executive decision as the DM. Select the best fit and announce it firmly.
+4. Do not present options to the players unless specifically asked to brainstorm with them; you should stay in character as the authoritative world-builder.
+
+## Combat Management Rules
+To ensure mechanical consistency and prevent narration hallucinations:
+1. **Initialize Combat**: When a battle begins, ALWAYS use `initialize_combat` to set up the enemies (Name, HP, AC, Notes). Generate their stats based on official 5e rules if not provided.
+2. **Track Every Hit**: Every time a creature takes damage, heals, or uses a limited resource (like a spell slot), use `track_combat_change`.
+3. **Verify Before Narrating**: Before you describe an enemy dying or being wounded, check their current state using `read_campaign_log(log_type='secrets')`.
+4. **Secret Tracking**: All combat stats are stored in `secrets_log.md`. DO NOT reveal exact HP numbers to players unless they have a specific ability to see them; use descriptive terms like "bloodied" (half HP) or "near death".
+---
+"""
+    return base_prompt + naming_rules

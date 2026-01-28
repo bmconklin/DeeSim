@@ -56,7 +56,9 @@ tools_list = [
     common_tools.validate_action,
     common_tools.complete_setup_step,
     common_tools.submit_character_sheet,
-    common_tools.generate_name
+    common_tools.generate_name,
+    common_tools.initialize_combat,
+    common_tools.track_combat_change
 ]
 
 # Colors
@@ -89,13 +91,7 @@ def main():
     print(f"{BLUE}Playing Campaign: {os.path.basename(campaign_root)}{NC}")
     
     # 2. Load System Prompt
-    prompt_path = os.path.join(campaign_root, "system_prompt.txt")
-    if not os.path.exists(prompt_path):
-        print(f"{RED}Error: system_prompt.txt not found.{NC}")
-        return
-        
-    with open(prompt_path, "r") as f:
-        system_instruction = f.read()
+    system_instruction = dm_utils.get_system_instruction()
         
     # 3. Load History
     history = dm_utils.load_chat_snapshot()
@@ -178,14 +174,9 @@ def main():
             response = session.send_message([user_input])
             
             # Extract text
-            ai_text = ""
-            # Handle different backend response types (Gemini vs Claude vs Local)
-            # Handle different backend response types (Gemini vs Claude vs Local)
-            ai_text = None
-            if hasattr(response, "text"):
-                ai_text = response.text
-            elif isinstance(response, dict):
-                ai_text = response.get("text")
+            ai_text = getattr(response, "text", None)
+            if ai_text is None and isinstance(response, dict):
+                ai_text = response.get("text")  # pylint: disable=no-member
             
             # Fallback if text is still None (e.g. Safety Block)
             if not ai_text:
@@ -194,10 +185,20 @@ def main():
             print(f"{GREEN}DM > {ai_text}{NC}\n")
             
             # Save History (The session object updates its internal history, we need to persist it)
-            # The bridge doesn't auto-save to disk, bot.py does. We must do it here.
-            # We need to get the UPDATED history from the session.
             new_history = session.get_history()
             dm_utils.save_chat_snapshot(new_history)
+            
+            # --- Auto-Image Generation ---
+            # 1. Check for regex-scraped prompt
+            image_found = dm_utils.extract_and_save_prompt_from_text(ai_text)
+            
+            # 2. Trigger generation if prompt exists (either from tool or regex)
+            image_path, _ = dm_utils.generate_image_from_pending()
+            if image_path:
+                if image_path == "SUCCESS_BUT_SAVE_FAILED":
+                    print(f"{YELLOW}🖼️ Image generated but failed to save to campaign folder.{NC}")
+                else:
+                    print(f"{BLUE}🖼️ Image saved to: {image_path}{NC}\n")
             
         except Exception as e:
             print(f"{RED}Error: {e}{NC}")

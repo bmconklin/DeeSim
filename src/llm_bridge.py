@@ -14,14 +14,19 @@ class MockResponse:
         self.text = text
 
 def python_type_to_json_type(py_type):
-    """Maps Python types to JSON schema types."""
-    if py_type == str: return "string"
-    if py_type == int: return "integer"
-    if py_type == float: return "number"
-    if py_type == bool: return "boolean"
-    if py_type == list: return "array"
-    if py_type == dict: return "object"
-    # Basic fallback for Optional/Union types
+    """Maps Python types to JSON schema types, handling typing generics."""
+    from typing import get_origin, get_args
+    
+    origin = get_origin(py_type) or py_type
+    
+    if origin is str: return "string"
+    if origin is int: return "integer"
+    if origin is float: return "number"
+    if origin is bool: return "boolean"
+    if origin is list: return "array"
+    if origin is dict: return "object"
+    
+    # Fallback
     return "string"
 
 def convert_to_ollama_tool(func):
@@ -38,10 +43,18 @@ def convert_to_ollama_tool(func):
         param_type = type_hints.get(param_name, str)
         param_desc = "Parameter" 
         
+        p_type = python_type_to_json_type(param_type)
         properties[param_name] = {
-            "type": python_type_to_json_type(param_type),
+            "type": p_type,
             "description": param_desc 
         }
+        
+        if p_type == "array":
+            # Gemini/Ollama require 'items' for array types
+            from typing import get_args
+            args = get_args(param_type)
+            item_type = args[0] if args else str
+            properties[param_name]["items"] = {"type": python_type_to_json_type(item_type)}
         
         if param.default == inspect.Parameter.empty:
             required.append(param_name)
@@ -140,7 +153,10 @@ class LocalChatSession:
                 tool_calls = message.get("tool_calls", [])
                 
                 if ai_text:
-                    final_ai_text = ai_text 
+                    if final_ai_text:
+                        final_ai_text += "\n\n" + ai_text
+                    else:
+                        final_ai_text = ai_text
                     print(f"🤖 AI Thought: {ai_text[:50]}...")
                 
                 # 3. Handle Tool Calls
@@ -177,7 +193,7 @@ class LocalChatSession:
                     self.context_window.append({"role": "assistant", "content": ai_text})
                     self.history.append({"role": "model", "parts": [ai_text]})
                     
-                    return MockResponse(ai_text)
+                    return MockResponse(final_ai_text)
                     
             except Exception as e:
                 return MockResponse(f"Local LLM Error: {e}")
@@ -327,9 +343,10 @@ class GoogleChatSession:
         import httpx
         
         # Robust Timeout Configuration
-        # Connect: 60s (Handshake)
-        # Read/Write: 120s (Generation)
         timeout_config = httpx.Timeout(120.0, connect=60.0)
+
+        # Store tool map for manual execution
+        self.tool_map = {f.__name__: f for f in tools}
 
         if vertex_project:
             print(f"☁️ Connecting to Vertex AI (Project: {vertex_project}, Loc: {vertex_location})")
@@ -338,7 +355,7 @@ class GoogleChatSession:
                 project=vertex_project, 
                 location=vertex_location,
                 http_options=types.HttpOptions(
-                    timeout=None, # Disable top-level timeout to avoid conflicts
+                    timeout=None, 
                     client_args={"timeout": timeout_config} 
                 )
             )
@@ -351,37 +368,112 @@ class GoogleChatSession:
                 )
             )
             
+        # Bundle all tools into a single Tool object with many function declarations
+        # This is more idiomatic for Gemini and ensures our manual schemas are respected
+        all_funcs = []
+        other_tools = []
+        for tool in tools:
+            if callable(tool):
+                schema = convert_to_ollama_tool(tool)
+                all_funcs.append(schema["function"])
+            else:
+                # If it's already a Tool or dict, we might need to extract its declarations
+                if isinstance(tool, dict) and "function_declarations" in tool:
+                    all_funcs.extend(tool["function_declarations"])
+                else:
+                    other_tools.append(tool)
+
+        processed_tools = other_tools
+        if all_funcs:
+            processed_tools.append({"function_declarations": all_funcs})
+
         self.chat = self.client.chats.create(
             model=model_name,
             history=history,
             config=types.GenerateContentConfig(
-                tools=tools,
+                tools=processed_tools,
                 system_instruction=system_instruction,
-                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=False)
+                # Disable automatic calling to capture intermediate narration
+                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
             )
         )
         
     def send_message(self, content_parts: List[Any], timeout: int = None) -> Any:
+        from google.genai import types
+        import httpx
+        
         config = None
         if timeout:
-            from google.genai import types
-            import httpx
-            # Pass timeout in client_args to be safe
-            # Determine if timeout matches our default 90/120 pattern or is custom
             t_val = float(timeout)
             t_conf = httpx.Timeout(t_val, connect=60.0)
-            
             config = types.GenerateContentConfig(
                 http_options=types.HttpOptions(
                     timeout=None,
                     client_args={"timeout": t_conf}
                 )
             )
-        return self.chat.send_message(content_parts, config=config)
+
+        final_text = ""
+        current_input = content_parts
+        max_turns = 10
+        turn = 0
+        
+        while turn < max_turns:
+            turn += 1
+            response = self.chat.send_message(current_input, config=config)
+            
+            # 1. Accumulate text
+            if response.text:
+                if final_text:
+                    final_text += "\n\n" + response.text
+                else:
+                    final_text = response.text
+                print(f"🤖 [Google] AI Thought: {response.text[:50]}...")
+
+            # 2. Check for tool calls
+            tool_calls = []
+            if response.candidates and response.candidates[0].content.parts:
+                for part in response.candidates[0].content.parts:
+                    if part.function_call:
+                        tool_calls.append(part.function_call)
+            
+            if not tool_calls:
+                # No more tools, we're done
+                return MockResponse(final_text)
+
+            # 3. Execute tools
+            tool_responses = []
+            for fc in tool_calls:
+                func_name = fc.name
+                args = fc.args or {}
+                print(f"🛠️ [Google] Tool Call: {func_name}({args})")
+                
+                if func_name in self.tool_map:
+                    try:
+                        func = self.tool_map[func_name]
+                        result = func(**args)
+                        tool_output = result
+                    except Exception as e:
+                        tool_output = {"error": f"Error executing {func_name}: {e}"}
+                else:
+                    tool_output = {"error": f"Error: Tool {func_name} not found."}
+                
+                # Format for Gemini Part
+                # Ensure it's a dict for function_response
+                if not isinstance(tool_output, dict):
+                    tool_output = {"result": str(tool_output)}
+                    
+                tool_responses.append(types.Part.from_function_response(
+                    name=func_name,
+                    response=tool_output
+                ))
+            
+            # 4. Prepare next turn
+            current_input = tool_responses
+            
+        return MockResponse(final_text + "\n\n[Error: Max tool turns reached]")
     
     def get_history(self):
-        # Return history from the underlying chat object
-        # The new SDK uses _curated_history for the message list
         return self.chat._curated_history
 
         return self.chat._curated_history

@@ -13,6 +13,7 @@ if not os.environ.get("SLACK_BOT_TOKEN") or not os.environ.get("SLACK_APP_TOKEN"
 
 import dm_utils
 import dnd_bridge
+import common_tools
 import re
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
@@ -188,12 +189,17 @@ def submit_character_sheet(character_name: str, details: str) -> str:
     """
     return dm_utils.save_character_sheet(character_name, details)
 
-def generate_name(race: str = "any") -> str:
+def generate_name(race: str = "any", count: int = 1) -> str:
     """
-    Generates a random fantasy name.
-    race: "elf", "dwarf", "human", "hobbit", or "any".
+    Generates random fantasy names for characters, locations, or items.
+    race: "elf", "dwarf", "human", "hobbit", "place" (towns), or "any".
+    count: How many names to generate (suggested: 5-10 for a pool of options). 
+
+    UNIVERSAL RULE: When you need a name, ALWAYS generate a pool of options (count=5 or more).
+    Evaluation: Review the generated list and select the ONE name that best fits the current tone, setting, and context.
+    Final Call: You are the DM. Do not ask the players to pick; you make the executive decision and announce it.
     """
-    return dm_utils.generate_random_name(race)
+    return dm_utils.generate_random_name(race, count)
 
 # --- Model Initialization ---
 # Define tools config for new SDK
@@ -213,19 +219,15 @@ tools_list = [
     generate_scene_image,
     validate_action,
     complete_setup_step, # NEW
-    submit_character_sheet # NEW
+    submit_character_sheet, # NEW
+    generate_name,
+    common_tools.initialize_combat,
+    common_tools.track_combat_change
 ]
 
 # Load System Prompt
 def get_system_instruction():
-    campaign_root = dm_utils.CAMPAIGN_ROOT
-    prompt_path = os.path.join(campaign_dir_from_root(campaign_root), "system_prompt.txt")
-    
-    if os.path.exists(prompt_path):
-        with open(prompt_path, "r") as f:
-            return f.read()
-    else:
-        return "You are a Dungeon Master. Use the tools provided to run the game."
+    return dm_utils.get_system_instruction()
 
 def campaign_dir_from_root(root):
     return root

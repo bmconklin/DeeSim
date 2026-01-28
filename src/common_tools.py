@@ -161,3 +161,54 @@ def lookup_rule(query: str) -> str:
     """
     rules_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "initial_rules.txt")
     return dm_utils.search_rules(query, rules_path)
+
+def initialize_combat(entities: list) -> str:
+    """
+    Sets up the initial state for a combat encounter.
+    entities: List of dicts, e.g. [{"name": "Goblin 1", "hp": 7, "max_hp": 7, "ac": 15, "notes": "Scimitar"}]
+    """
+    return dm_utils.update_combat_state(entities)
+
+def track_combat_change(character_name: str, hp_change: int = 0, notes_update: str = None) -> str:
+    """
+    Updates a specific combatant's HP or notes.
+    character_name: The name of the creature to update.
+    hp_change: Amount to change HP (negative for damage, positive for healing).
+    notes_update: New notes or status effects (e.g. "Stunned", "Used 1st level slot").
+    """
+    state_text = dm_utils.get_combat_state()
+    if "No active combat" in state_text:
+        return state_text
+
+    # Basic parsing of the markdown table
+    import re
+    entities = []
+    lines = state_text.split("\n")
+    for line in lines:
+        if "|" in line and "---" not in line and "Name | HP" not in line:
+            parts = [p.strip() for p in line.split("|") if p.strip()]
+            if len(parts) >= 3:
+                name = parts[0]
+                hp_val = parts[1]
+                ac = parts[2]
+                notes = parts[3] if len(parts) > 3 else ""
+                
+                try:
+                    curr_hp, max_hp = map(int, hp_val.split("/"))
+                except:
+                    curr_hp, max_hp = 0, 0
+                
+                if name.lower() == character_name.lower():
+                    curr_hp = max(0, min(max_hp, curr_hp + hp_change))
+                    if notes_update:
+                        notes = notes_update
+                
+                entities.append({
+                    "name": name,
+                    "hp": curr_hp,
+                    "max_hp": max_hp,
+                    "ac": ac,
+                    "notes": notes
+                })
+
+    return dm_utils.update_combat_state(entities)

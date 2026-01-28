@@ -126,7 +126,7 @@ All responses about D&D content must include a reference to the D&D 5e API as th
             monster_search_term = theme.lower() if theme else ""
 
             # Check if any monsters match our criteria
-            from resources import get_items
+            from .resources import get_items
             monster_results = get_items("monsters", cache=None)
             if isinstance(monster_results, dict) and "items" in monster_results:
                 for monster in monster_results["items"]:
@@ -194,7 +194,7 @@ All responses about D&D content must include a reference to the D&D 5e API as th
                 class_data = fetch_dnd_entity("classes", class_name.lower())
 
                 # Try to get spells from the API
-                from resources import get_items
+                from .resources import get_items
                 spell_results = get_items("spells", cache=None)
 
                 if isinstance(spell_results, dict) and "items" in spell_results:
@@ -293,7 +293,7 @@ All responses about D&D content must include a reference to the D&D 5e API as th
         suggested_monsters = []
         try:
             # Get monsters from the API
-            from resources import get_items
+            from .resources import get_items
             monster_results = get_items("monsters", cache=None)
 
             if isinstance(monster_results, dict) and "items" in monster_results:
@@ -397,7 +397,7 @@ All responses about D&D content must include a reference to the D&D 5e API as th
         suggested_items = []
         try:
             # Get magic items from the API
-            from resources import get_items
+            from .resources import get_items
             item_results = get_items("magic-items", cache=None)
 
             if isinstance(item_results, dict) and "items" in item_results:

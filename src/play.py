@@ -25,7 +25,7 @@ if len(sys.argv) > 1:
         print(f"⚠️ Warning: Campaign '{arg_campaign}' not found at {target_path}. Using default from .env")
 
 # from bot import tools_list, DEBUG_MODE # Removed to avoid Slack dependency
-from llm_bridge import get_chat_session
+from llm_bridge import get_chat_session, resolve_model_config
 import dm_utils
 import common_tools
 
@@ -105,7 +105,7 @@ def main():
         print(f"✨ Resumed session ({len(history)} messages).")
         
     # 4. Initialize Session
-    provider, model_name = llm_bridge.resolve_model_config()
+    provider, model_name = resolve_model_config()
     print(f"🚀 Starting session with {provider} model: {model_name}")
     
     try:
@@ -122,12 +122,12 @@ def main():
     kb = KeyBindings()
 
     @kb.add('enter')
-    def _(event):
+    def _submit(event):
         """Submit when Enter is pressed."""
         event.current_buffer.validate_and_handle()
 
     @kb.add('escape', 'enter')
-    def _(event):
+    def _newline(event):
         """Insert newline when Esc+Enter (Alt+Enter) is pressed."""
         event.current_buffer.insert_text('\n')
         
@@ -135,7 +135,7 @@ def main():
     # prompt_toolkit often sees Shift+Enter as just Enter
     
     @kb.add('c-d')
-    def _(event):
+    def _exit(event):
         """Exit when Ctrl-D is pressed."""
         print("\nExiting...")
         sys.exit(0)

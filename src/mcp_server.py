@@ -1,5 +1,6 @@
 from mcp.server.fastmcp import FastMCP
 import dm_utils
+import dnd_bridge
 import os
 
 # Initialize FastMCP Server
@@ -153,7 +154,7 @@ def lookup_rule(query: str) -> str:
     Args:
         query: The rule topic to search for (e.g. "grapple", "rest", "cover")
     """
-    return dm_utils.search_dnd_rules(query)
+    return dnd_bridge.search_dnd_rules(query)
 
 @mcp.tool()
 def log_event(message: str, is_secret: bool = False) -> str:

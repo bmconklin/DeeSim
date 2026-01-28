@@ -109,6 +109,27 @@ def save_chat_snapshot(history_data: list):
     with open(path, "w") as f:
         json.dump(clean_history, f, indent=2)
 
+def undo_last_message() -> str:
+    """
+    Removes the last (user, assistant) interaction from history.
+    """
+    history = load_chat_snapshot()
+    if not history:
+        return "History is empty."
+        
+    # Remove the last message (expected to be AI)
+    last = history.pop()
+    removed_text = ""
+    if "parts" in last and last["parts"]:
+        removed_text = str(last["parts"][0])[:50] + "..."
+
+    # If the message before it was from the 'user', remove that too
+    if history and history[-1].get("role") == "user":
+        history.pop()
+        
+    save_chat_snapshot(history)
+    return removed_text
+
 def roll_dice(expression: str) -> dict:
     """
     Parses a dice expression (e.g., '1d20+5') and returns the detailed result.

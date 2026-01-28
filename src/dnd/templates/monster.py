@@ -4,6 +4,7 @@ Monster template module for D&D Knowledge Navigator.
 This module contains templates for formatting monster data in markdown.
 """
 
+import sys
 from src.dnd.templates.config import is_template_enabled, get_formatting_option
 
 

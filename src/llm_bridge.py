@@ -105,7 +105,7 @@ class LocalChatSession:
                  
              self.context_window.append({"role": role, "content": content})
 
-    def send_message(self, content_parts: List[Any], max_turns=5) -> Any:
+    def send_message(self, content_parts: List[Any], max_turns=5, timeout=None) -> Any:
         # 1. Parse Input
         user_text = ""
         for part in content_parts:
@@ -220,7 +220,7 @@ class ClaudeChatSession:
              self.messages.append({"role": role, "content": content})
 
 
-    def send_message(self, content_parts: List[Any], max_turns=10) -> Any:
+    def send_message(self, content_parts: List[Any], max_turns=10, timeout=None) -> Any:
         # 1. Parse Input
         user_text = ""
         for part in content_parts:
@@ -324,12 +324,32 @@ class GoogleChatSession:
         # Import lazily to avoid heavy deps if running local-only
         import google.genai as genai
         from google.genai import types
+        import httpx
         
+        # Robust Timeout Configuration
+        # Connect: 60s (Handshake)
+        # Read/Write: 120s (Generation)
+        timeout_config = httpx.Timeout(120.0, connect=60.0)
+
         if vertex_project:
             print(f"☁️ Connecting to Vertex AI (Project: {vertex_project}, Loc: {vertex_location})")
-            self.client = genai.Client(vertexai=True, project=vertex_project, location=vertex_location)
+            self.client = genai.Client(
+                vertexai=True, 
+                project=vertex_project, 
+                location=vertex_location,
+                http_options=types.HttpOptions(
+                    timeout=None, # Disable top-level timeout to avoid conflicts
+                    client_args={"timeout": timeout_config} 
+                )
+            )
         else:
-            self.client = genai.Client(api_key=api_key)
+            self.client = genai.Client(
+                api_key=api_key,
+                http_options=types.HttpOptions(
+                    timeout=None,
+                    client_args={"timeout": timeout_config}
+                )
+            )
             
         self.chat = self.client.chats.create(
             model=model_name,
@@ -341,42 +361,83 @@ class GoogleChatSession:
             )
         )
         
-    def send_message(self, content_parts: List[Any]) -> Any:
-        return self.chat.send_message(content_parts)
+    def send_message(self, content_parts: List[Any], timeout: int = None) -> Any:
+        config = None
+        if timeout:
+            from google.genai import types
+            import httpx
+            # Pass timeout in client_args to be safe
+            # Determine if timeout matches our default 90/120 pattern or is custom
+            t_val = float(timeout)
+            t_conf = httpx.Timeout(t_val, connect=60.0)
+            
+            config = types.GenerateContentConfig(
+                http_options=types.HttpOptions(
+                    timeout=None,
+                    client_args={"timeout": t_conf}
+                )
+            )
+        return self.chat.send_message(content_parts, config=config)
     
     def get_history(self):
         # Return history from the underlying chat object
         # The new SDK uses _curated_history for the message list
         return self.chat._curated_history
 
-def get_chat_session(model_name: str, history: List[Dict], tools: List[Any], system_instruction: str):
+        return self.chat._curated_history
+
+def resolve_model_config():
     """
-    Factory to return either a Google Chat, Claude Chat, or a Local Chat.
+    Determines the active provider and model name based on environment variables.
+    Returns: (provider_type, model_name)
     """
     google_key = os.environ.get("GOOGLE_API_KEY")
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
-    vertex_project = os.environ.get("GOOGLE_VERTEX_PROJECT") # Triggers ADC/System Auth
+    vertex_project = os.environ.get("GOOGLE_VERTEX_PROJECT")
     
     # Priority 1: Force Claude
     if os.environ.get("FORCE_CLAUDE") and anthropic_key:
-        claude_model = os.environ.get("CLAUDE_MODEL_NAME", DEFAULT_CLAUDE_MODEL)
-        print(f"🧠 FORCE_CLAUDE set. Switching to Claude: {claude_model}")
-        return ClaudeChatSession(anthropic_key, claude_model, history, tools, system_instruction)
-
+        return "claude", os.environ.get("CLAUDE_MODEL_NAME", DEFAULT_CLAUDE_MODEL)
+        
     # Priority 2: Google (Key OR Vertex)
     if google_key or vertex_project:
-        vertex_loc = os.environ.get("GOOGLE_VERTEX_LOCATION", "us-central1")
-        return GoogleChatSession(google_key, model_name, history, tools, system_instruction, vertex_project, vertex_loc)
+        return "google", os.environ.get("MODEL_NAME", "gemini-1.5-flash")
     
     # Priority 3: Claude (if no Google)
-    elif anthropic_key:
-        claude_model = os.environ.get("CLAUDE_MODEL_NAME", DEFAULT_CLAUDE_MODEL)
-        print(f"🧠 ANTHROPIC_API_KEY found. Switching to Claude: {claude_model}")
-        return ClaudeChatSession(anthropic_key, claude_model, history, tools, system_instruction)
+    if anthropic_key:
+        return "claude", os.environ.get("CLAUDE_MODEL_NAME", DEFAULT_CLAUDE_MODEL)
         
     # Priority 4: Local
-    else:
-        # Use Local LLM
-        local_model = os.environ.get("LOCAL_MODEL_NAME", DEFAULT_LOCAL_MODEL)
-        print(f"🔌 No Cloud Keys/Projects found. Switching to Local LLM: {local_model}")
-        return LocalChatSession(local_model, history, system_instruction, tools)
+    return "local", os.environ.get("LOCAL_MODEL_NAME", DEFAULT_LOCAL_MODEL)
+
+def get_chat_session(model_name: str, history: List[Dict], tools: List[Any], system_instruction: str):
+    """
+    Factory to return either a Google Chat, Claude Chat, or a Local Chat.
+    Uses resolve_model_config for defaults, but allows overrides if model_name is passed explicitly 
+    (though currently model_name arg is often just the default env var value).
+    """
+    provider, config_model = resolve_model_config()
+    
+    # If the passed model_name matches the 'gemini-1.5-flash' default we setup in other files, 
+    # we prefer the resolved config_model which might be a Local/Claude model.
+    # To avoid confusion, let's rely on the provider logic.
+    
+    google_key = os.environ.get("GOOGLE_API_KEY")
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+    vertex_project = os.environ.get("GOOGLE_VERTEX_PROJECT")
+    
+    if provider == "claude":
+        print(f"🧠 Switching to Claude: {config_model}")
+        return ClaudeChatSession(anthropic_key, config_model, history, tools, system_instruction)
+        
+    if provider == "google":
+        vertex_loc = os.environ.get("GOOGLE_VERTEX_LOCATION", "us-central1")
+        # Use the config_model as authoritative source of truth for the name
+        return GoogleChatSession(google_key, config_model, history, tools, system_instruction, vertex_project, vertex_loc)
+        
+    if provider == "local":
+        print(f"🔌 Switching to Local LLM: {config_model}")
+        return LocalChatSession(config_model, history, system_instruction, tools)
+
+    raise ValueError("Unknown provider configuration")
+

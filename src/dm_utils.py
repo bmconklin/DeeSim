@@ -483,7 +483,7 @@ def summarize_and_compact_session_logic(manual_summary: str = None) -> str:
             """
             
             response = client.models.generate_content(
-                model=os.environ.get("MODEL_NAME", "gemini-2.5-flash"),
+                model=os.environ.get("MODEL_NAME", "gemini-1.5-flash"),
                 contents=prompt
             )
             
@@ -537,7 +537,36 @@ def propose_image(prompt: str) -> str:
             f.write(prompt)
         return f"Image Proposal Saved: '{prompt}'"
     except Exception as e:
+        return f"Image Proposal Saved: '{prompt}'"
+    except Exception as e:
         return f"Error saving proposal: {e}"
+
+def extract_and_save_prompt_from_text(text: str) -> bool:
+    """
+    Fallback: Scrapes an image prompt from the model's text output if it forgot to call the tool.
+    Looks for: **Image Prompt:** "..."
+    """
+    import re
+    # Match "**Image Prompt:**" and capture until "---", double newline, or end of string.
+    # We use DOTALL for the capture group to include internal newlines, but stop at major delimiters.
+    patterns = [
+        r"\*\*Image Prompt:\*\*\s*(?:\"|”|“)?(.*?)(?:\"|”|“)?\s*(?=---|\[|$)",
+        r"Image Prompt:\s*(?:\"|”|“)?(.*?)(?:\"|”|“)?\s*(?=---|\[|$)"
+    ]
+    
+    for pat in patterns:
+        match = re.search(pat, text, re.IGNORECASE | re.DOTALL)
+        if match:
+            prompt = match.group(1).strip()
+            # If it captured too much (e.g. whole rest of text), maybe check length
+            # But usually --- or [Start of next block] catches it.
+            
+            if len(prompt) > 10 and len(prompt) < 1000:
+                print(f"DEBUG: Scraped prompt: {prompt}")
+                propose_image(prompt) 
+                return True
+            
+    return False
 
 def clear_pending_image() -> str:
     """
@@ -567,11 +596,14 @@ def generate_image_from_pending() -> tuple[bytes, str]:
     try:
         api_key = os.environ.get("GOOGLE_API_KEY")
         if not api_key:
+            print("DEBUG: Missing Google API Key")
             return None, "Feature disabled: GOOGLE_API_KEY missing. See README.md."
             
+        print(f"DEBUG: Generating image for prompt: {prompt[:50]}...")
         client = genai.Client(api_key=api_key)
         
-        # Use Imagen 4 as verified
+        
+        # Use Imagen 4 Fast (Verified in list)
         response = client.models.generate_images(
             model='imagen-4.0-fast-generate-001',
             prompt=prompt,
@@ -580,15 +612,20 @@ def generate_image_from_pending() -> tuple[bytes, str]:
             )
         )
         
+        print(f"DEBUG: Response Type: {type(response)}")
+        
         if response.generated_images:
+            print("DEBUG: Image generated successfully.")
             image_bytes = response.generated_images[0].image.image_bytes
             # Clear pending after successful generation
             os.remove(path)
             return image_bytes, prompt
         else:
+            print(f"DEBUG: No images in response. Response: {response}")
             return None, "No images returned from API."
             
     except Exception as e:
+        print(f"DEBUG: Exception during generation: {e}")
         return None, f"Generation Error: {e}"
 
 # --- Rule Validation Logic ---
@@ -662,7 +699,7 @@ def validate_game_mechanic(action: str, character_name: str) -> str:
         """
         
         response = client.models.generate_content(
-            model=os.environ.get("MODEL_NAME", "gemini-2.5-flash"),
+            model=os.environ.get("MODEL_NAME", "gemini-1.5-flash"),
             contents=prompt
         )
         
@@ -710,7 +747,10 @@ def get_setup_instructions(step: int) -> str:
         1. Tell the players you are monitoring chat but will only respond when tagged.
         2. Ask them to discuss what type of campaign they want (High Fantasy, Sci-Fi, Horror, etc.).
         3. Explain they should Chat amongst themselves, then tag you (@DeeSim) with the final decision.
-        4. When they provide the summary, acknowledge it and CALL `complete_setup_step()`.
+        4. CRITICAL: DO NOT call `complete_setup_step()` until the players have explicitly agreed on a setting.
+        5. If they are still discussing, just acknowledge and wait.
+        6. IMPROVE THE EXPERIENCE: If the answer is vague, ask clarifying questions (e.g. "Grimdark or Noblebright?").
+        7. ONLY when you have a clear, final answer, CALL `complete_setup_step()`.
         """
     elif step == 1:
         return """
@@ -719,7 +759,9 @@ def get_setup_instructions(step: int) -> str:
         1. Ask one player to tag all participants (including themselves) so you know who is playing.
         2. Remind them this isn't fixed; players can join/leave later.
         3. Players should use command `!iam <Name>` to register if they haven't.
-        4. When the roster seems settled, CALL `complete_setup_step()`.
+        4. CRITICAL: DO NOT advance until you have at least one confirmed player.
+        5. Ask: "Is that everyone for now?" before proceeding.
+        6. When the roster is confirmed by a player, CALL `complete_setup_step()`.
         """
     elif step == 2:
         return """
@@ -728,15 +770,20 @@ def get_setup_instructions(step: int) -> str:
         1. Ask EACH player to provide their: Class, Level, Name, Race, Background, and Stats (STR/DEX/etc).
         2. Request a brief backstory or playstyle preference.
         3. YOU MUST call `submit_character_sheet(name, details)` for EACH player as they provide data.
-        4. When all players are recorded, CALL `complete_setup_step()`.
+        4. Do NOT call `complete_setup_step()` after just one player if others are present.
+        5. Ask: "Has everyone submitted their details?"
+        6. If a player wants to skip providing details now, that is okay, but confirm explicitly.
+        7. When all active players are accounted for, CALL `complete_setup_step()`.
         """
     elif step == 3:
         return """
         [SETUP MODE: STEP 4 of 4 - DICE PREFERENCE]
         Your Goal: Establish Dice Rolling Etiquette.
         1. Ask if they prefer to roll real physical dice (Trust System) or if they want YOU (the Bot) to roll for them.
-        2. Note their preference.
-        3. CALL `complete_setup_step()` to finish setup and start the game!
+        2. Explain that for the Trust System, you will tell them the DC and consequence, and they report the result.
+        3. Note their preference.
+        4. CRITICAL: Confirm the choice before finishing.
+        5. CALL `complete_setup_step()` to finish setup and start the game!
         """
     else:
         return "" # Setup complete, normal play.

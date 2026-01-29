@@ -91,5 +91,8 @@ The following commands are available in any channel where the bot has access. Yo
 
 ### Legacy/Debug
 - **`!show`**: (Deprecated) Used to show a pending image. Use `!generate` or `!visualize` instead.
-- **`!admin`**: (Restricted) Placeholder for future DM-only tools.
+### Administration
+- **`!admin bind <campaign_name>`**: 🆕 **Multi-Campaign Support.** Binds this specific channel to a campaign folder (e.g., `campaigns/lost_mine`). Everything typed here will now save to that folder.
+- **`!admin allow <UserID>`**: Adds a user to the allowed list (Required if `ALLOWED_USERS` is set).
+- **`!admin list`**: View allowed users.
 

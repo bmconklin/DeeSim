@@ -31,5 +31,15 @@ To ensure unique and thematic naming for NPCs and locations without repetitive d
 2. **Authoritative Choice**: The DM evaluates the options against the campaign's tone and makes the final decision firmware.
 3. **Executive DM Role**: Options are NOT presented to players unless requested; the DM remains in character as the authoritative world-builder.
 
+## 4. Multi-Tenant Session Isolation (Multi-Campaign) 🎲🌍
+
+The system can now host multiple independent campaigns across Slack, Discord, and CLI simultaneously from a single instance.
+
+**How it works:**
+- **Campaign Registry**: Maps `platform:channel_id` to a `campaign_name` (saved in `campaign_registry.json`).
+- **Context Switching**: Uses Python `contextvars` to maintain a thread-safe "Active Campaign" state. When a message arrives from Slack Channel A, the engine instantly pivots its root directory to the folder for Campaign A.
+- **Isolated State**: This ensures that chat history, NPC stats, world info, and images are strictly isolated. Players in Campaign A cannot see the secrets or history of Campaign B.
+- **Dynamic Binding**: Admins can use `!admin bind <name>` directly in-chat to provision a new campaign or switch an existing channel's data source.
+
 ---
-These enhancements ensure a professional-grade RPG experience where the rules are consistent and the story is never "skipped over".
+These enhancements ensure a professional-grade RPG experience where the rules are consistent, the story is never "skipped over", and the system scales with your groups.

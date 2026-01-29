@@ -10,6 +10,38 @@ try:
 except ImportError:
     genai = None # Handle missing dependency for pure local/offline mode
 import fantasynames as fn
+from contextvars import ContextVar
+
+# --- Context & Registry Management ---
+active_campaign_ctx = ContextVar("active_campaign", default=None)
+REGISTRY_PATH = os.path.join(os.getcwd(), "campaign_registry.json")
+
+def get_campaign_for_channel(platform_id: str, channel_id: str) -> str:
+    """Returns the campaign name bound to a specific channel."""
+    if not os.path.exists(REGISTRY_PATH):
+        return None
+    try:
+        with open(REGISTRY_PATH, "r") as f:
+            registry = json.load(f)
+        return registry.get(f"{platform_id}:{channel_id}")
+    except:
+        return None
+
+def bind_channel_to_campaign(platform_id: str, channel_id: str, campaign_name: str):
+    """Binds a platform/channel to a campaign folder."""
+    registry = {}
+    if os.path.exists(REGISTRY_PATH):
+        try:
+            with open(REGISTRY_PATH, "r") as f:
+                registry = json.load(f)
+        except: pass
+    registry[f"{platform_id}:{channel_id}"] = campaign_name
+    with open(REGISTRY_PATH, "w") as f:
+        json.dump(registry, f, indent=2)
+
+def set_active_campaign(campaign_name: str):
+    """Sets the campaign context for the current thread/task."""
+    return active_campaign_ctx.set(campaign_name)
 
 def download_slack_file(url: str, token: str) -> bytes:
     """
@@ -200,17 +232,41 @@ def search_rules(query: str, rules_file_path: str) -> str:
     return "\n---\n".join(results[:3]) # Return top 3 matches
 
 # --- Campaign & Session Management ---
+# 1. Resolve Campaigns Directory
+CAMPAIGNS_DIR = os.environ.get("DM_CAMPAIGNS_DIR", os.path.join(os.getcwd(), "campaigns"))
+# 2. Resolve Default/Active Campaign Name
+ACTIVE_CAMPAIGN = os.environ.get("DM_ACTIVE_CAMPAIGN", "default")
 
-CAMPAIGN_ROOT = os.environ.get("DM_CAMPAIGN_ROOT", os.path.join(os.getcwd(), "campaigns/default"))
+def get_campaign_root():
+    """Dynamically resolves the root directory for the active campaign."""
+    # Priority 1: Managed Context (Thread/Task Local)
+    ctx_name = active_campaign_ctx.get()
+    if ctx_name:
+        root = os.path.join(CAMPAIGNS_DIR, ctx_name)
+        if not os.path.exists(root):
+             os.makedirs(root, exist_ok=True)
+        return root
+        
+    # Priority 2: System-level Override (DM_CAMPAIGN_ROOT)
+    env_root = os.environ.get("DM_CAMPAIGN_ROOT")
+    if env_root:
+        return env_root
+        
+    # Priority 3: Default Campaign
+    root = os.path.join(CAMPAIGNS_DIR, ACTIVE_CAMPAIGN)
+    if not os.path.exists(root):
+         os.makedirs(root, exist_ok=True)
+    return root
 
 def get_current_session_dir():
-    current_session_file = os.path.join(CAMPAIGN_ROOT, "current_session.txt")
+    root = get_campaign_root()
+    current_session_file = os.path.join(root, "current_session.txt")
     if os.path.exists(current_session_file):
         with open(current_session_file, "r") as f:
             session_name = f.read().strip()
-        return os.path.join(CAMPAIGN_ROOT, session_name)
+        return os.path.join(root, session_name)
     else:
-        return CAMPAIGN_ROOT
+        return root
 
 def get_log_paths():
     session_dir = get_current_session_dir()
@@ -219,7 +275,8 @@ def get_log_paths():
     return session_log, secrets_log
 
 def start_new_session_logic(summary_of_previous: str) -> str:
-    current_session_file = os.path.join(CAMPAIGN_ROOT, "current_session.txt")
+    root = get_campaign_root()
+    current_session_file = os.path.join(root, "current_session.txt")
     if not os.path.exists(current_session_file):
         return "Error: Could not find current_session.txt. Is this a valid campaign?"
         
@@ -233,7 +290,7 @@ def start_new_session_logic(summary_of_previous: str) -> str:
         
     next_num = current_num + 1
     next_session_name = f"session_{next_num}"
-    next_session_dir = os.path.join(CAMPAIGN_ROOT, next_session_name)
+    next_session_dir = os.path.join(root, next_session_name)
     
     os.makedirs(next_session_dir, exist_ok=True)
     
@@ -258,10 +315,7 @@ def request_player_roll_logic(check_type: str, dc: int, consequence: str) -> str
 # --- Player & Attendance Logic ---
 
 def get_player_mapping_path():
-    session_dir = get_current_session_dir()
-    # Save mapping in the campaign root usually, but session dir is fine if we want per-campaign
-    # Actually, player mapping is likely campaign-wide.
-    return os.path.join(CAMPAIGN_ROOT, "player_mapping.json")
+    return os.path.join(get_campaign_root(), "player_mapping.json")
 
 def load_player_mapping() -> dict:
     path = get_player_mapping_path()
@@ -386,7 +440,7 @@ def read_campaign_log(log_type: str) -> str:
     log_type: 'session', 'secrets', or 'world'.
     """
     session_log, secrets_log = get_log_paths()
-    campaign_dir = CAMPAIGN_ROOT # From global var
+    campaign_dir = get_campaign_root()
     
     if log_type == "session":
         path = session_log
@@ -412,7 +466,7 @@ def update_world_info(fact: str) -> str:
     - Location details (e.g. "The cave entrance is collapsed").
     - Quest state changes that matter for the whole campaign.
     """
-    campaign_dir = CAMPAIGN_ROOT
+    campaign_dir = get_campaign_root()
     path = os.path.join(campaign_dir, "world_info.md")
     
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d")
@@ -546,7 +600,7 @@ def summarize_and_compact_session_logic(manual_summary: str = None) -> str:
 # --- Image Generation Logic ---
 
 def get_pending_image_path():
-    return os.path.join(CAMPAIGN_ROOT, "pending_image_prompt.txt")
+    return os.path.join(get_campaign_root(), "pending_image_prompt.txt")
 
 def propose_image(prompt: str) -> str:
     """
@@ -558,9 +612,15 @@ def propose_image(prompt: str) -> str:
             f.write(prompt)
         return f"Image Proposal Saved: '{prompt}'"
     except Exception as e:
-        return f"Image Proposal Saved: '{prompt}'"
-    except Exception as e:
         return f"Error saving proposal: {e}"
+
+def clear_pending_image() -> str:
+    """Removes the pending image prompt."""
+    path = get_pending_image_path()
+    if os.path.exists(path):
+        os.remove(path)
+        return "Cleared pending image prompt."
+    return "No pending image prompt to clear."
 
 def extract_and_save_prompt_from_text(text: str) -> bool:
     """
@@ -756,7 +816,7 @@ def validate_game_mechanic(action: str, character_name: str) -> str:
 # --- Campaign Setup Wizard Logic ---
 
 def get_setup_state_path():
-    return os.path.join(CAMPAIGN_ROOT, "setup_state.json")
+    return os.path.join(get_campaign_root(), "setup_state.json")
 
 def get_setup_step() -> int:
     """Returns the current step index (0-4) of the setup wizard."""
@@ -838,18 +898,11 @@ def save_character_sheet(name: str, details_text: str) -> str:
     """
     Saves unstructured character details to a file for reference.
     """
-    sheets_dir = os.path.join(CAMPAIGN_ROOT, "character_sheets")
+    sheets_dir = os.path.join(get_campaign_root(), "character_sheets")
     os.makedirs(sheets_dir, exist_ok=True)
     
     safe_name = "".join(x for x in name if x.isalnum() or x in (' ', '_', '-')).strip()
     path = os.path.join(sheets_dir, f"{safe_name}.txt")
-    
-    with open(path, "w") as f:
-        f.write(f"Character Sheet: {name}\n")
-        f.write(f"Recorded: {datetime.datetime.now().isoformat()}\n")
-        f.write("-------------------------------------------\n")
-        f.write(details_text)
-        
     
     with open(path, "w") as f:
         f.write(f"Character Sheet: {name}\n")
@@ -978,7 +1031,7 @@ def get_system_instruction():
     # Check session dir first, then campaign root
     prompt_path = os.path.join(session_dir, "system_prompt.txt")
     if not os.path.exists(prompt_path):
-        prompt_path = os.path.join(CAMPAIGN_ROOT, "system_prompt.txt")
+        prompt_path = os.path.join(get_campaign_root(), "system_prompt.txt")
         
     base_prompt = ""
     if os.path.exists(prompt_path):

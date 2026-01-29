@@ -236,9 +236,8 @@ def campaign_dir_from_root(root):
 from core.engine import GameEngine
 from core.permissions import is_allowed, permissions
 
-# Initialize Engine with System Prompt and Tools
+# Initialize Engine with Tools (Multi-tenant)
 engine = GameEngine(
-    system_instruction=get_system_instruction(),
     tools_list=tools_list
 )
 
@@ -276,44 +275,88 @@ def process_attachments(event_data, logger):
                 
     return parts
 
+@app.message(re.compile("^!help"))
+def handle_help_command(message, say):
+    """
+    Lists available commands.
+    """
+    help_text = (
+        "📜 **Dungeon Master Commands** 📜\n\n"
+        "**Player Commands:**\n"
+        "`!iam <Character Name>` - Register your character name for this channel.\n"
+        "`!name <race>` - Generate a random name for a specific race.\n"
+        "`!show` - Approve and post a generated image.\n"
+        "`!hide` - Discard a generated image.\n"
+        "`!help` - Show this help message.\n\n"
+        "**Session Commands:**\n"
+        "`!wrapup` - End current session and generate summary.\n"
+        "`!startsession` - Start a new session (uses summary from last wrapup).\n\n"
+        "**Admin Commands:**\n"
+        "`!admin bind <campaign_name>` - Bind this channel to a specific campaign.\n"
+        "`!admin list` - List allowed users.\n"
+        "`!admin allow <@user>` - Allow a user to interact with the bot.\n"
+        "`!admin deny <@user>` - Block a user.\n"
+    )
+    say(help_text)
+
 @app.message(re.compile("^!admin"))
 def handle_admin_commands(message, say):
     user_id = message['user']
-    admin_id = os.environ.get("ADMIN_USER_ID")
+    channel_id = message['channel']
     
-    if not admin_id or user_id != admin_id:
-        say(f"⛔ You are not the Dungeon Master (Admin ID: {admin_id}).")
-        return
-        
-    text = message['text']
-    parts = text.split()
+    # Resolve Campaign Context
+    campaign_name = dm_utils.get_campaign_for_channel("slack", channel_id)
+    token = None
+    if campaign_name:
+        token = dm_utils.set_active_campaign(campaign_name)
     
-    if len(parts) < 2:
-        say("Usage: `!admin allow @user`, `!admin deny @user`, `!admin list`")
-        return
-        
-    command = parts[1]
-    
-    if command == "list":
-        users = permissions.get_allowed_users()
-        say(f"**Allowed Users**:\n{users if users else 'None (Public Mode if env is empty)'}")
-        return
-        
-    if command in ["allow", "deny"]:
-        # Extract user ID from tag <@U12345>
-        target_ids = re.findall(r"<@([A-Z0-9]+)>", text)
-        if not target_ids:
-            say("Please tag the user(s) you want to modify.")
+    try:
+        admin_id = os.environ.get("ADMIN_USER_ID")
+        if not admin_id or user_id != admin_id:
+            say(f"⛔ You are not the Dungeon Master (Admin ID: {admin_id}).")
             return
             
-        for tid in target_ids:
-            if command == "allow":
-                permissions.add_user(tid)
-                say(f"✅ Added <@{tid}> to allowed list.")
-            else:
-                permissions.remove_user(tid)
-                say(f"❌ Removed <@{tid}> from allowed list.")
-        return
+        text = message['text']
+        parts = text.split()
+        
+        if len(parts) < 2:
+            say("Usage: `!admin allow @user`, `!admin deny @user`, `!admin list`")
+            return
+            
+        command = parts[1]
+        
+        if command == "list":
+            users = permissions.get_allowed_users()
+            say(f"**Allowed Users**:\n{users if users else 'None (Public Mode if env is empty)'}")
+            return
+            
+        if command in ["allow", "deny"]:
+            # Extract user ID from tag <@U12345>
+            target_ids = re.findall(r"<@([A-Z0-9]+)>", text)
+            if not target_ids:
+                say("Please tag the user(s) you want to modify.")
+                return
+                
+            for tid in target_ids:
+                if command == "allow":
+                    permissions.add_user(tid)
+                    say(f"✅ Added <@{tid}> to allowed list.")
+                else:
+                    permissions.remove_user(tid)
+                    say(f"❌ Removed <@{tid}> from allowed list.")
+            return
+    
+        elif command == "bind":
+            if len(parts) < 3:
+                say("Usage: `!admin bind <campaign_name>`")
+                return
+            campaign_name = parts[2]
+            dm_utils.bind_channel_to_campaign("slack", message['channel'], campaign_name)
+            say(f"✅ Success! Channel is now bound to campaign `{campaign_name}`.")
+            return
+    finally:
+        if token:
+            dm_utils.active_campaign_ctx.reset(token)
 
 @app.message(re.compile("^!show"))
 def handle_show_command(message, say, logger):
@@ -344,8 +387,71 @@ def handle_hide_command(message, say):
     """
     User rejects the pending image.
     """
-    result = dm_utils.clear_pending_image()
     say(f"🗑️ {result}")
+
+
+@app.message(re.compile("^!wrapup"))
+def handle_wrapup_command(message, say):
+    # Context wrapper
+    channel_id = message['channel']
+    campaign_name = dm_utils.get_campaign_for_channel("slack", channel_id)
+    token = None
+    if campaign_name:
+        token = dm_utils.set_active_campaign(campaign_name)
+    else:
+        say("❌ This channel is not bound to a campaign. Run `!admin bind <name>` first.")
+        return
+
+    try:
+        say("📜 Compacting session log and generating summary...")
+        result = dm_utils.summarize_and_compact_session_logic()
+        say(result)
+        say("✅ Session wrapped! Type `!startsession` to begin the next chapter.")
+    except Exception as e:
+        say(f"❌ Wrap-up failed: {e}")
+    finally:
+        if token: dm_utils.active_campaign_ctx.reset(token)
+
+@app.message(re.compile("^!startsession"))
+def handle_startsession_command(message, say):
+    # Context wrapper
+    channel_id = message['channel']
+    campaign_name = dm_utils.get_campaign_for_channel("slack", channel_id)
+    token = None
+    if campaign_name:
+        token = dm_utils.set_active_campaign(campaign_name)
+    else:
+        say("❌ This channel is not bound to a campaign. Run `!admin bind <name>` first.")
+        return
+
+    try:
+        say("🌅 Initializing new session...")
+        
+        # 1. Read the summary from current session log
+        # Note: If !wrapup was just run, this reads the 'previous' session log which is technically the 'current' one on disk before session increment?
+        # No, start_new_session_logic moves current to session_X.
+        # So we read the log that exists NOW. 
+        log_path, _ = dm_utils.get_log_paths()
+        
+        summary = "Session ended without automated summary."
+        if os.path.exists(log_path):
+            with open(log_path, "r") as f:
+                content = f.read()
+            if "## Summary" in content:
+                try:
+                    summary = content.split("## Summary")[1].split("##")[0].strip()
+                except IndexError:
+                    pass
+
+        # 2. Start new session
+        result = dm_utils.start_new_session_logic(summary)
+        say(f"🎉 {result}")
+        
+    except Exception as e:
+        say(f"❌ Failed to start new session: {e}")
+    finally:
+        if token: dm_utils.active_campaign_ctx.reset(token)
+
 
 
 @app.message(re.compile("^!name"))
@@ -382,17 +488,26 @@ def handle_name_command(message, say):
 @app.message(re.compile("^!iam"))
 def handle_iam_command(message, say):
     user_id = message['user']
+    channel_id = message['channel']
     text = message['text']
     
-    # Format: !iam <Character Name>
-    match = re.search(r"!iam\s+(.+)", text, re.IGNORECASE)
-    if not match:
-        say("Usage: `!iam <Character Name>` (e.g. `!iam Grognak`)")
-        return
-        
-    char_name = match.group(1).strip()
-    result = dm_utils.register_player(user_id, char_name)
-    say(result)
+    # Resolve Campaign Context
+    campaign_name = dm_utils.get_campaign_for_channel("slack", channel_id)
+    token = None
+    if campaign_name:
+        token = dm_utils.set_active_campaign(campaign_name)
+    
+    try:
+        match = re.search(r"!iam\s+(.+)", text, re.IGNORECASE)
+        if not match:
+            say("Usage: `!iam <Character Name>` (e.g. `!iam Grognak`)")
+        else:
+            char_name = match.group(1).strip()
+            result = dm_utils.register_player(user_id, char_name)
+            say(result)
+    finally:
+        if token:
+            dm_utils.active_campaign_ctx.reset(token)
 
 @app.event("app_mention")
 def handle_app_mentions(body, say, logger):
@@ -412,11 +527,12 @@ def handle_app_mentions(body, say, logger):
     
     response_text = engine.process_message(
         user_id=user_id,
-        user_name=None, # Slack doesn't give name easily in event, engine will use ID/Char mapping
+        user_name=None, 
         message_text=user_text,
         platform_id="slack",
         attachments=image_parts,
-        channel_id=channel_id
+        channel_id=channel_id,
+        server_id=body.get("team_id")
     )
     
     say(response_text)
@@ -468,11 +584,13 @@ def handle_message_events(message, say, logger):
         user_id=user_id,
         user_name=None,
         message_text=text,
+        platform_id="slack",
         channel_id=channel_id,
         server_id=server_id
     )
 
 if __name__ == "__main__":
     print("🤖 Agentic DM (Slack) is listening via Socket Mode...")
-    print(f"Campaign Root: {dm_utils.CAMPAIGN_ROOT}")
+    # Dynamic root (default)
+    print(f"Default Campaign Root: {dm_utils.get_campaign_root()}")
     SocketModeHandler(app, os.environ["SLACK_APP_TOKEN"]).start()

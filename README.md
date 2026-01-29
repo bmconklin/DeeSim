@@ -11,6 +11,7 @@ An AI-powered Dungeon Master that runs locally on your machine, connects to **Di
 - **Anti-Hallucination**: Checks a local rules file before creating rulings.
 - **High-Fidelity Narration**: Captures and aggregates all DM dialogue across complex turns (e.g., between dice rolls).
 - **Combat Stat Tracking**: Maintains persistent enemy HP, AC, and resource tracking in `secrets_log.md` to prevent mid-battle hallucinations.
+- **Multi-Tenant (Multi-Campaign)**: Run a single DM instance that hosts multiple independent campaigns across different channels or platforms simultaneously.
 - **Offline Capable**: Core tools run without any API keys.
 
 ### Discord Integration
@@ -118,6 +119,7 @@ As the Admin, you can manage who joins the game dynamically:
 - `!admin allow @user`: Adds a user to the allowed list.
 - `!admin deny @user`: Bans a user.
 - `!admin list`: Shows current allowed users.
+- `!admin bind <campaign_name>`: 🎲 **Binds current channel to a specific campaign folder.**
 
 ## Documentation
 - [Slack Setup Guide](slack_walkthrough.md): How to get the tokens.

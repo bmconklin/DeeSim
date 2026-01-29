@@ -59,13 +59,19 @@ This guide allows you to run your Agentic DM as a Slack bot user (`@DungeonMaste
    ./setup_slack.sh
    ```
 
-4. Start the bot:
+4. Start the bot (Unified Launcher):
    ```bash
-   python3 src/bot.py
+   ./run.sh
    ```
+   *(This starts both Slack and Discord bots if tokens are provided).*
 
 ## How to Play
 1. Go to Slack.
 2. Create a channel (e.g. `#dnd-session`).
 3. Invite the bot: `/invite @DeeSim`.
 4. Say hello: `@DeeSim Let's start the game!`
+
+### Admin Commands
+- **`!admin bind <campaign_name>`**: 🆕 **Multi-Campaign Support.** Binds this specific channel to a campaign folder (e.g., `campaigns/dragons_heist`). 
+- **`!admin allow @user`**: Authorize a player.
+- **`!admin list`**: See who is allowed.

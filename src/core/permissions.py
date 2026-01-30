@@ -40,11 +40,21 @@ class PermissionsManager:
 # Singleton instance
 permissions = PermissionsManager()
 
-def is_allowed(user_id=None, channel_id=None, server_id=None):
+def is_allowed(user_id=None, channel_id=None, server_id=None, platform_id=None):
     # 1. Check Env Vars (Static)
     env_allowed_users = os.environ.get("ALLOWED_USER_IDS", "")
     env_allowed_channels = os.environ.get("ALLOWED_CHANNEL_IDS", "")
-    env_allowed_servers = os.environ.get("ALLOWED_SERVER_IDS", "") # Discord Guild ID or Slack Team ID
+    
+    # Platform-specific Server/Workspace overrides
+    env_global = os.environ.get("ALLOWED_SERVER_IDS", "")
+    if platform_id == "discord":
+        val = os.environ.get("DISCORD_ALLOWED_SERVER_IDS")
+        env_allowed_servers = val if val is not None else env_global
+    elif platform_id == "slack":
+        val = os.environ.get("SLACK_ALLOWED_WORKSPACE_IDS")
+        env_allowed_servers = val if val is not None else env_global
+    else:
+        env_allowed_servers = env_global
     
     # If NO access control is set at all (Env or JSON), allow all
     json_users = permissions.get_allowed_users()
@@ -70,7 +80,7 @@ def is_allowed(user_id=None, channel_id=None, server_id=None):
         if channel_id and str(channel_id) in [c.strip() for c in env_allowed_channels.split(",")]:
             channel_match = True
 
-    # Servers (New)
+    # Servers (Platform Aware)
     server_match = True
     if env_allowed_servers:
         server_match = False
@@ -78,5 +88,4 @@ def is_allowed(user_id=None, channel_id=None, server_id=None):
             server_match = True
             
     # Logic: ALL active restrictions must be met. 
-    # (e.g. If User AND Channel are set, must match BOTH)
     return user_match and channel_match and server_match

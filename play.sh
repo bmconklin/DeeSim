@@ -29,15 +29,8 @@ fi
 
 # Set Campaign Env Var if provided
 if [ ! -z "$CAMPAIGN" ]; then
-    # Resolve absolute path if needed, or assume relative to campaigns dir
-    if [[ "$CAMPAIGN" = /* ]]; then
-        export DM_CAMPAIGN_ROOT="$CAMPAIGN"
-    else
-        # get absolute path of repo root
-        ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-        export DM_CAMPAIGN_ROOT="$ROOT_DIR/campaigns/$CAMPAIGN"
-    fi
-    echo "🎯 Campaign Override: $DM_CAMPAIGN_ROOT"
+    export DM_ACTIVE_CAMPAIGN="$CAMPAIGN"
+    echo "🎯 Active Campaign: $DM_ACTIVE_CAMPAIGN"
 fi
 
 echo "🚀 Launching Agentic DM on Platform: $PLATFORM"

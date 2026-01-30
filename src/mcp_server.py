@@ -6,24 +6,8 @@ import os
 # Initialize FastMCP Server
 mcp = FastMCP("DungeonMasterTools")
 
-# Global path to current campaign sessions (set by environment variable or default)
-CAMPAIGN_ROOT = os.environ.get("DM_CAMPAIGN_ROOT", os.path.join(os.getcwd(), "campaigns/default"))
-
-def get_current_session_dir():
-    current_session_file = os.path.join(CAMPAIGN_ROOT, "current_session.txt")
-    if os.path.exists(current_session_file):
-        with open(current_session_file, "r") as f:
-            session_name = f.read().strip()
-        return os.path.join(CAMPAIGN_ROOT, session_name)
-    else:
-        # Fallback for legacy or uninitialized campaigns
-        return CAMPAIGN_ROOT
-
-def get_log_paths():
-    session_dir = get_current_session_dir()
-    session_log = os.path.join(session_dir, "session_log.md")
-    secrets_log = os.path.join(session_dir, "secrets_log.md")
-    return session_log, secrets_log
+# campaigning paths are handled by dm_utils
+from dm_utils import get_campaign_root, get_current_session_dir, get_log_paths
 
 # Note: dm_utils tools now handle missing API keys gracefully.
 # No extra logic needed here as we delegate to them.
@@ -37,7 +21,8 @@ def start_new_session(summary_of_previous: str) -> str:
         summary_of_previous: A brief summary of what happened in the last session to seed the next log.
     """
     # 1. Determine next session number
-    current_session_file = os.path.join(CAMPAIGN_ROOT, "current_session.txt")
+    root = get_campaign_root()
+    current_session_file = os.path.join(root, "current_session.txt")
     if not os.path.exists(current_session_file):
         return "Error: Could not find current_session.txt. Is this a valid campaign?"
         
@@ -52,7 +37,7 @@ def start_new_session(summary_of_previous: str) -> str:
         
     next_num = current_num + 1
     next_session_name = f"session_{next_num}"
-    next_session_dir = os.path.join(CAMPAIGN_ROOT, next_session_name)
+    next_session_dir = os.path.join(get_campaign_root(), next_session_name)
     
     # 2. Create new directory
     os.makedirs(next_session_dir, exist_ok=True)

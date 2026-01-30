@@ -7,22 +7,17 @@ from dotenv import load_dotenv
 # Load Env
 load_dotenv()
 
-# --- CAMPAIGN SELECTION (Before Imports) ---
+# --- CAMPAIGN SELECTION ---
+# If DM_ACTIVE_CAMPAIGN is set (from play.sh), dm_utils will pick it up automatically.
+# We no longer need manual path resolution here unless the user passed a direct path via sys.argv.
 if len(sys.argv) > 1:
-    arg_campaign = sys.argv[1]
-    # Check if absolute path or name
-    if os.path.isabs(arg_campaign):
-        target_path = arg_campaign
+    arg = sys.argv[1]
+    if os.path.exists(arg) and os.path.isabs(arg):
+        os.environ["DM_CAMPAIGN_ROOT"] = arg
+        print(f"🎯 CLI Override: Explicit path '{arg}'")
     else:
-        # Assume it's in the 'campaigns' folder
-        root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        target_path = os.path.join(root_dir, "campaigns", arg_campaign)
-        
-    if os.path.exists(target_path):
-        os.environ["DM_CAMPAIGN_ROOT"] = target_path
-        print(f"🎯 CLI Override: Loading campaign from '{target_path}'")
-    else:
-        print(f"⚠️ Warning: Campaign '{arg_campaign}' not found at {target_path}. Using default from .env")
+        os.environ["DM_ACTIVE_CAMPAIGN"] = arg
+        print(f"🎯 CLI Pivot: Campaign name '{arg}'")
 
 # from bot import tools_list, DEBUG_MODE # Removed to avoid Slack dependency
 from llm_bridge import get_chat_session, resolve_model_config
@@ -82,11 +77,9 @@ def main():
     print_banner()
     
     # 1. Load Campaign Check
-    campaign_root = os.environ.get("DM_CAMPAIGN_ROOT")
-    if not campaign_root or not os.path.exists(campaign_root):
-        print(f"{RED}Error: DM_CAMPAIGN_ROOT invalid.{NC}")
-        print("Please set it in .env or run setup_slack.sh first.")
-        return
+    campaign_root = dm_utils.get_campaign_root()
+    if not os.path.exists(campaign_root):
+        os.makedirs(campaign_root, exist_ok=True)
 
     print(f"{BLUE}Playing Campaign: {os.path.basename(campaign_root)}{NC}")
     

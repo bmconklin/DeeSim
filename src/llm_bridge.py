@@ -368,33 +368,16 @@ class GoogleChatSession:
                 )
             )
             
-        # Bundle all tools into a single Tool object with many function declarations
-        # This is more idiomatic for Gemini and ensures our manual schemas are respected
-        all_funcs = []
-        other_tools = []
-        for tool in tools:
-            if callable(tool):
-                schema = convert_to_ollama_tool(tool)
-                all_funcs.append(schema["function"])
-            else:
-                # If it's already a Tool or dict, we might need to extract its declarations
-                if isinstance(tool, dict) and "function_declarations" in tool:
-                    all_funcs.extend(tool["function_declarations"])
-                else:
-                    other_tools.append(tool)
-
-        processed_tools = other_tools
-        if all_funcs:
-            processed_tools.append({"function_declarations": all_funcs})
-
+        # Simplify tool handling: Pass functions directly to the SDK
+        # The new Google GenAI SDK can handle python functions natively
+        
         self.chat = self.client.chats.create(
             model=model_name,
             history=history,
             config=types.GenerateContentConfig(
-                tools=processed_tools,
+                tools=tools, # Pass raw tools list, not schemas
                 system_instruction=system_instruction,
-                # Disable automatic calling to capture intermediate narration
-                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
+                tool_config={"function_calling_config": {"mode": "AUTO"}}
             )
         )
         
@@ -446,16 +429,19 @@ class GoogleChatSession:
             for fc in tool_calls:
                 func_name = fc.name
                 args = fc.args or {}
-                print(f"🛠️ [Google] Tool Call: {func_name}({args})")
+                print(f"🛠️ [Google] Tool Call Attempt: {func_name}({args})")
                 
                 if func_name in self.tool_map:
                     try:
                         func = self.tool_map[func_name]
                         result = func(**args)
+                        print(f"   -> Tool Execution Success: {str(result)[:100]}...")
                         tool_output = result
                     except Exception as e:
+                        print(f"   -> Tool Execution Error: {e}")
                         tool_output = {"error": f"Error executing {func_name}: {e}"}
                 else:
+                    print(f"   -> Tool Not Found: {func_name}")
                     tool_output = {"error": f"Error: Tool {func_name} not found."}
                 
                 # Format for Gemini Part

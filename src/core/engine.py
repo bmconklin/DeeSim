@@ -10,15 +10,14 @@ from .permissions import is_allowed
 class GameEngine:
     def __init__(self, tools_list: list):
         self.tools_list = tools_list
-        self.sessions = {} # campaign_name -> ChatSession
+        # self.sessions was removed to enforce statelessness
         provider, resolved_name = llm_bridge.resolve_model_config()
         self.model_name = resolved_name
         print(f"✨ [Engine] Multitenant Initialized with {provider} model: {self.model_name}")
 
     def get_campaign_session(self, campaign_name: str):
         """Retrieves or initializes a chat session for a specific campaign."""
-        if campaign_name in self.sessions:
-            return self.sessions[campaign_name]
+        # Removed caching: Always load fresh from disk to respect campaign switching/Setup Wizard changes
         
         # We assume the context is already set by the caller (process_message)
         history = dm_utils.load_chat_snapshot()
@@ -32,7 +31,6 @@ class GameEngine:
             tools=self.tools_list,
             system_instruction=system_instruction
         )
-        self.sessions[campaign_name] = session
         return session
 
     def handle_admin_bind(self, platform_id, channel_id, user_id, message_text):
@@ -120,7 +118,18 @@ class GameEngine:
                     
                     # 4. Save History (Context is set, so snapshots save to correct folder)
                     try:
-                        dm_utils.save_chat_snapshot(session.get_history())
+                        # Normalize history access (Google wrapper might need helper, Local has .history)
+                        if hasattr(session, "get_history"):
+                            hist_data = session.get_history()
+                        elif hasattr(session, "history"):
+                            hist_data = session.history
+                        elif hasattr(session, "chat") and hasattr(session.chat, "history"):
+                             # Extract raw history from Google Chat object if needed, but wrapper should handle this
+                             hist_data = session.history # Assuming wrapper syncs it or exposes it
+                        else:
+                             hist_data = []
+
+                        dm_utils.save_chat_snapshot(hist_data)
                     except Exception as h_err:
                         print(f"[Engine] Failed to save history: {h_err}")
                         

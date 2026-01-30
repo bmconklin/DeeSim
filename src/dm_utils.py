@@ -304,7 +304,7 @@ def start_new_session_logic(summary_of_previous: str) -> str:
     with open(current_session_file, "w") as f:
         f.write(next_session_name)
         
-    return f"Successfully started {next_session_name}. Previous session archived."
+    return f"Successfully started the next chapter: **{next_session_name}**. The stage is set!"
 
 def request_player_roll_logic(check_type: str, dc: int, consequence: str) -> str:
     session_log, secrets_log = get_log_paths()
@@ -406,6 +406,9 @@ def append_to_context_buffer(author: str, text: str):
     # Add new message
     timestamp = datetime.datetime.now().strftime("%H:%M")
     buffer.append(f"[{timestamp}] {author}: {text}")
+    
+    # Ensure directory exists
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     
     # Save
     with open(path, "w") as f:

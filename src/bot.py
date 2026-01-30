@@ -24,7 +24,19 @@ from google.genai import types
 # Client init moved to llm_bridge call later
 
 # Setup Slack
+# Setup Slack
 app = App(token=os.environ["SLACK_BOT_TOKEN"])
+
+# Fetch Bot Identity Global
+BOT_NAME = "Dungeon Master"
+BOT_ID = None
+try:
+    auth_res = app.client.auth_test()
+    BOT_ID = auth_res["user_id"]
+    BOT_NAME = auth_res["user"]
+    print(f"🤖 Bot Identity: {BOT_NAME} ({BOT_ID})")
+except Exception as e:
+    print(f"⚠️ Failed to init bot identity: {e}")
 
 # --- Tool Wrappers for Gemini ---
 
@@ -299,6 +311,26 @@ def handle_help_command(message, say):
     )
     say(help_text)
 
+# Helper for User Names
+user_cache = {}
+def fetch_user_name(user_id):
+    if user_id in user_cache:
+        return user_cache[user_id]
+    try:
+        result = app.client.users_info(user=user_id)
+        if result["ok"]:
+            user = result["user"]
+            # Prefer display name, fallback to real name
+            name = user["profile"].get("display_name") or user.get("real_name") or user.get("name")
+            user_cache[user_id] = name
+            return name
+    except Exception as e:
+        # Log once or verbose
+        print(f"⚠️ Failed to fetch user name for {user_id}: {e}")
+    
+    # Fallback so the Engine doesn't see None
+    return f"User <{user_id}>"
+
 @app.message(re.compile("^!admin"))
 def handle_admin_commands(message, say):
     user_id = message['user']
@@ -452,6 +484,74 @@ def handle_startsession_command(message, say):
     finally:
         if token: dm_utils.active_campaign_ctx.reset(token)
 
+@app.message(re.compile("^!recap"))
+def handle_recap_command(message, say):
+    """
+    Forcefully retrieves the log for a specific session (or current) and summarizes it.
+    Usage: !recap or !recap session_4
+    """
+    # Context wrapper
+    channel_id = message['channel']
+    campaign_name = dm_utils.get_campaign_for_channel("slack", channel_id)
+    token = None
+    if campaign_name:
+        token = dm_utils.set_active_campaign(campaign_name)
+    else:
+        say("❌ This channel is not bound to a campaign.")
+        return
+
+    try:
+        parts = message.get("text", "").split()
+        target_session = parts[1] if len(parts) > 1 else None
+
+        root = dm_utils.get_campaign_root()
+        
+        if target_session:
+            # Look for specific session folder
+            log_path = os.path.join(root, target_session, "session_log.md")
+        else:
+            # Use current
+            log_path, _ = dm_utils.get_log_paths()
+
+        if not os.path.exists(log_path):
+            say(f"❌ Could not find log file at `{log_path}`.")
+            return
+
+        with open(log_path, "r") as f:
+            content = f.read()
+
+        # 1. Show user (truncated)
+        say(f"📜 **Recap from {os.path.basename(os.path.dirname(log_path))}**:\n\n{content[:1000]}...\n\n*(Injecting full log into AI memory...)*")
+        
+        # 2. Feed to Agent to rebuild context
+        user_id = message.get("user")
+        user_name = fetch_user_name(user_id)
+        
+        # Construct a system-style injection message
+        injection_text = (
+            f"[SYSTEM NOTICE: The user has requested to LOAD the following session log into your active memory. "
+            f"Read this context and acknowledge it, but do not repeat it back fully.]\n\n"
+            f"--- START OF RECAP ({os.path.basename(os.path.dirname(log_path))}) ---\n"
+            f"{content}\n"
+            f"--- END OF RECAP ---"
+        )
+        
+        response_text = engine.process_message(
+            user_id=user_id,
+            user_name=user_name,
+            message_text=injection_text,
+            platform_id="slack",
+            attachments=[],
+            channel_id=channel_id,
+            server_id=message.get("team")
+        )
+        say(f"🤖 {response_text}")
+            
+    except Exception as e:
+        say(f"❌ Recap failed: {e}")
+    finally:
+        if token: dm_utils.active_campaign_ctx.reset(token)
+
 
 
 @app.message(re.compile("^!name"))
@@ -518,17 +618,25 @@ def handle_app_mentions(body, say, logger):
     logger.info(f"Received mention from {user_id}")
     user_text = event["text"]
     
+    # Strip the bot's mention from the text to avoid confusion
+    # Slack mentions look like <@U12345>
+    if BOT_ID and f"<@{BOT_ID}>" in user_text:
+        user_text = user_text.replace(f"<@{BOT_ID}>", "").strip()
+
     # Process Attachments (Images)
     image_parts = process_attachments(event, logger)
     
     # Delegate to Engine
-    # We pass user_name as None for now, or fetch it if needed. 
-    # Engine handles Char Name lookup via user_id.
+    # Fetch real user name for better UX
+    user_name = fetch_user_name(user_id)
+    
+    # Inject Bot Identity Context
+    final_text = f"[Context: You are '{BOT_NAME}'. Address the user as '{user_name}'.]\n{user_text}"
     
     response_text = engine.process_message(
         user_id=user_id,
-        user_name=None, 
-        message_text=user_text,
+        user_name=user_name,
+        message_text=final_text,
         platform_id="slack",
         attachments=image_parts,
         channel_id=channel_id,
@@ -566,10 +674,15 @@ def handle_message_events(message, say, logger):
         # Process Attachments (Images)
         image_parts = process_attachments(message, logger)
         
+        user_name = fetch_user_name(user_id)
+
+        # Inject Bot Identity Context
+        final_text = f"[Context: You are '{BOT_NAME}'. Address the user as '{user_name}'.]\n{text}"
+
         response_text = engine.process_message(
             user_id=user_id,
-            user_name=None,
-            message_text=text,
+            user_name=user_name,
+            message_text=final_text,
             platform_id="slack",
             attachments=image_parts,
             channel_id=channel_id,
@@ -580,9 +693,10 @@ def handle_message_events(message, say, logger):
 
     # --- CHANNEL BUFFER LOGIC (Passive) ---
     # Only buffer if allowed
+    user_name = fetch_user_name(user_id)
     engine.buffer_message(
         user_id=user_id,
-        user_name=None,
+        user_name=user_name,
         message_text=text,
         platform_id="slack",
         channel_id=channel_id,

@@ -918,6 +918,36 @@ def save_character_sheet(name: str, details_text: str) -> str:
         
     return f"Saved character sheet for {name}."
 
+def list_character_sheets() -> str:
+    """
+    Returns a list of all saved character sheet names for the active campaign.
+    """
+    sheets_dir = os.path.join(get_campaign_root(), "character_sheets")
+    if not os.path.isdir(sheets_dir):
+        return "No character sheets found. The character_sheets directory does not exist."
+
+    files = [f for f in os.listdir(sheets_dir) if f.endswith(".txt")]
+    if not files:
+        return "No character sheets found."
+
+    names = [os.path.splitext(f)[0] for f in sorted(files)]
+    return "Characters:\n" + "\n".join(f"- {name}" for name in names)
+
+def read_character_sheet(name: str) -> str:
+    """
+    Reads and returns the full contents of a specific character's sheet.
+    """
+    sheets_dir = os.path.join(get_campaign_root(), "character_sheets")
+    safe_name = "".join(x for x in name if x.isalnum() or x in (' ', '_', '-')).strip()
+    path = os.path.join(sheets_dir, f"{safe_name}.txt")
+
+    if not os.path.exists(path):
+        available = list_character_sheets()
+        return f"No character sheet found for '{name}'.\n{available}"
+
+    with open(path, "r") as f:
+        return f.read()
+
 # --- Name Generation Logic ---
 
 def generate_random_name(race: str = "any", count: int = 1) -> str:

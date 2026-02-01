@@ -1,0 +1,19 @@
+[project]
+name = "deesim"
+version = "0.1.0"
+description = "Agentic Dungeon Master - AI-powered D&D 5e campaign manager"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=1.0.0",
+    "requests>=2.28.0",
+    "google-genai>=1.0.0",
+]
+
+[project.optional-dependencies]
+slack = [
+    "slack-bolt>=1.18.0",
+]
+
+[tool.uv]
+dev-dependencies = []

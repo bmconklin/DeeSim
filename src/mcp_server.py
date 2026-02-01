@@ -171,6 +171,26 @@ def read_campaign_log(log_type: str) -> str:
     return dm_utils.read_campaign_log(log_type)
 
 @mcp.tool()
+def list_sessions() -> str:
+    """
+    Lists all session directories in the active campaign.
+    Shows which files exist in each session and which is current.
+    Call this before read_full_session to discover available sessions.
+    """
+    return dm_utils.list_sessions()
+
+@mcp.tool()
+def read_full_session(session_name: str = "current") -> str:
+    """
+    Reads ALL log files from a specific session (session_log, secrets_log,
+    and full_archive) combined into one response. Use this to fully recap
+    a session's events, DM secrets, and raw chronological log.
+    Args:
+        session_name: e.g. "session_3" or "current" for the active session.
+    """
+    return dm_utils.read_session(session_name)
+
+@mcp.tool()
 def validate_action(action: str, character_name: str) -> str:
     """
     Validates a player's proposed action against the rules and their character state.
@@ -223,6 +243,23 @@ def submit_character_sheet(character_name: str, details: str) -> str:
     Saves a player's character sheet details during setup.
     """
     return dm_utils.save_character_sheet(character_name, details)
+
+@mcp.tool()
+def list_character_sheets() -> str:
+    """
+    Lists all saved character sheets for the active campaign.
+    Use this to discover which characters exist before reading their details.
+    """
+    return dm_utils.list_character_sheets()
+
+@mcp.tool()
+def read_character_sheet(character_name: str) -> str:
+    """
+    Reads the full contents of a specific character's sheet.
+    Args:
+        character_name: The name of the character whose sheet to read.
+    """
+    return dm_utils.read_character_sheet(character_name)
 
 if __name__ == "__main__":
     mcp.run()

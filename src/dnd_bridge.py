@@ -1,8 +1,9 @@
 import os
 import sys
 
-# Add project root to path to allow 'src.dnd' imports
-sys.path.append(os.getcwd())
+# Resolve project root from this file's location (works regardless of cwd)
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(_PROJECT_ROOT)
 
 from src.dnd.core.cache import APICache
 from src.dnd.core import tools as dnd_tools
@@ -21,7 +22,7 @@ class MockApp:
 
 # Initialize Cache
 # Store cache in .dnd_cache to keep it clean
-CACHE_DIR = os.path.join(os.getcwd(), ".dnd_cache")
+CACHE_DIR = os.path.join(_PROJECT_ROOT, ".dnd_cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 # Initialize components

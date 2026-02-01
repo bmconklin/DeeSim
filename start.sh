@@ -35,19 +35,19 @@ else
     echo -e "${GREEN}uv not found, using venv + pip...${NC}"
 
     # Create Virtual Environment if it doesn't exist or is broken
-    if [ ! -f "venv/bin/activate" ]; then
+    if [ ! -f ".venv/bin/activate" ]; then
         echo -e "${GREEN}Creating (or recreating) virtual environment...${NC}"
-        rm -rf venv
-        python3 -m venv venv
+        rm -rf .venv
+        python3 -m venv .venv
     fi
 
     # Activate Virtual Environment
-    source venv/bin/activate
+    source .venv/bin/activate
 
     # Install Dependencies
     echo -e "${GREEN}Installing dependencies...${NC}"
     pip install --upgrade pip
-    pip install mcp
+    pip install -r requirements.txt
 
     # Run the Wizard
     echo -e "${BLUE}Launching Setup Wizard...${NC}"

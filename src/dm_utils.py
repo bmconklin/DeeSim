@@ -9,7 +9,10 @@ try:
     from google.genai import types
 except ImportError:
     genai = None # Handle missing dependency for pure local/offline mode
-import fantasynames as fn
+try:
+    import fantasynames as fn
+except ImportError:
+    fn = None  # fantasynames requires typed-ast, unavailable on Python 3.13+
 from contextvars import ContextVar
 
 # --- Context & Registry Management ---
@@ -928,20 +931,23 @@ def generate_random_name(race: str = "any", count: int = 1) -> str:
         for _ in range(max(1, min(count, 10))):
             name = None
             r = race.lower()
-            
+
             if r in ["place", "town", "city", "location", "village"]:
-                # Logic for town names using suffixes
+                # Place names use local generation (no fantasynames needed)
                 roots = [
-                    "Oak", "Deep", "Shadow", "Gold", "High", "Stone", "River", "Green", "Winter", "Summer", 
-                    "Iron", "Black", "White", "Gray", "Storm", "Cloud", "Sun", "Moon", "Star", "Fire", 
+                    "Oak", "Deep", "Shadow", "Gold", "High", "Stone", "River", "Green", "Winter", "Summer",
+                    "Iron", "Black", "White", "Gray", "Storm", "Cloud", "Sun", "Moon", "Star", "Fire",
                     "Frost", "Mist", "Raven", "Wolf", "Dragon", "Amber", "Silver", "Night", "Dawn"
                 ]
                 suffixes = [
-                    "haven", "fell", "wood", "run", "crest", "ford", "bury", "ton", "field", "bridge", 
+                    "haven", "fell", "wood", "run", "crest", "ford", "bury", "ton", "field", "bridge",
                     "glen", "peak", "hold", "spire", "watch", "keep", "gate", "port", "marsh", "vale",
                     "dale", "ridge", "point", "well", "drift", "bay", "rock", "cliff"
                 ]
                 name = f"{random.choice(roots)}{random.choice(suffixes)}"
+            elif fn is None:
+                # fantasynames unavailable (e.g. Python 3.13+); signal LLM to generate
+                return None
             elif r == "elf":
                 name = fn.elf()
             elif r == "dwarf":
@@ -956,19 +962,19 @@ def generate_random_name(race: str = "any", count: int = 1) -> str:
                 # Default to a mix
                 pick = random.choice([fn.human, fn.elf, fn.dwarf, fn.anglo])
                 name = pick()
-            
+
             if name:
                 names.append(name)
-        
+
         if not names:
-            return "No specified generator for that race. Please imagine one!"
-            
+            return None
+
         if len(names) == 1:
             return names[0]
         return ", ".join(names)
 
     except Exception as e:
-        return f"NameError: {e}"
+        return None
 
 def update_combat_state(entities: list) -> str:
     """

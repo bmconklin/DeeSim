@@ -464,6 +464,96 @@ def read_campaign_log(log_type: str) -> str:
     with open(path, "r") as f:
         return f.read()
 
+def list_sessions() -> str:
+    """
+    Lists all session directories in the active campaign with metadata.
+    Shows which files exist in each session and which session is current.
+    """
+    root = get_campaign_root()
+    current_session_file = os.path.join(root, "current_session.txt")
+    current_name = ""
+    if os.path.exists(current_session_file):
+        with open(current_session_file, "r") as f:
+            current_name = f.read().strip()
+
+    sessions = []
+    for entry in sorted(os.listdir(root)):
+        session_dir = os.path.join(root, entry)
+        if os.path.isdir(session_dir) and entry.startswith("session_"):
+            files = os.listdir(session_dir)
+            has_log = "session_log.md" in files
+            has_secrets = "secrets_log.md" in files
+            has_archive = "session_log_full_archive.md" in files
+            is_current = (entry == current_name)
+
+            marker = " (CURRENT)" if is_current else ""
+            file_list = []
+            if has_log:
+                file_list.append("session_log")
+            if has_secrets:
+                file_list.append("secrets_log")
+            if has_archive:
+                file_list.append("full_archive")
+            sessions.append(f"- {entry}{marker}: [{', '.join(file_list)}]")
+
+    if not sessions:
+        return "No sessions found."
+
+    return "Sessions:\n" + "\n".join(sessions)
+
+def read_session(session_name: str = "current") -> str:
+    """
+    Reads all log files from a specific session directory.
+    Returns combined content from session_log.md, secrets_log.md,
+    and session_log_full_archive.md with clear section headers.
+
+    Args:
+        session_name: e.g. "session_3" or "current" for the active session.
+    """
+    root = get_campaign_root()
+
+    if session_name == "current":
+        current_session_file = os.path.join(root, "current_session.txt")
+        if os.path.exists(current_session_file):
+            with open(current_session_file, "r") as f:
+                session_name = f.read().strip()
+        else:
+            return "Error: Could not determine current session."
+
+    session_dir = os.path.join(root, session_name)
+    if not os.path.isdir(session_dir):
+        available = list_sessions()
+        return f"Session '{session_name}' not found.\n{available}"
+
+    sections = []
+    sections.append(f"# Full Recap: {session_name}\n")
+
+    # Session log (compacted summary or active log)
+    session_log_path = os.path.join(session_dir, "session_log.md")
+    if os.path.exists(session_log_path):
+        with open(session_log_path, "r") as f:
+            content = f.read().strip()
+        sections.append(f"## Session Log\n{content}\n")
+
+    # Full archive (raw chronological log before compacting)
+    archive_path = os.path.join(session_dir, "session_log_full_archive.md")
+    if os.path.exists(archive_path):
+        with open(archive_path, "r") as f:
+            content = f.read().strip()
+        sections.append(f"## Full Archive\n{content}\n")
+
+    # Secrets log (DM-only information)
+    secrets_path = os.path.join(session_dir, "secrets_log.md")
+    if os.path.exists(secrets_path):
+        with open(secrets_path, "r") as f:
+            content = f.read().strip()
+        sections.append(f"## DM Secrets\n{content}\n")
+
+    if len(sections) == 1:
+        return f"Session '{session_name}' exists but contains no log files."
+
+    return "\n".join(sections)
+
 def update_world_info(fact: str) -> str:
     """
     Appends a persistent fact to world_info.md.

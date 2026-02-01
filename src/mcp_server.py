@@ -171,6 +171,26 @@ def read_campaign_log(log_type: str) -> str:
     return dm_utils.read_campaign_log(log_type)
 
 @mcp.tool()
+def list_sessions() -> str:
+    """
+    Lists all session directories in the active campaign.
+    Shows which files exist in each session and which is current.
+    Call this before read_full_session to discover available sessions.
+    """
+    return dm_utils.list_sessions()
+
+@mcp.tool()
+def read_full_session(session_name: str = "current") -> str:
+    """
+    Reads ALL log files from a specific session (session_log, secrets_log,
+    and full_archive) combined into one response. Use this to fully recap
+    a session's events, DM secrets, and raw chronological log.
+    Args:
+        session_name: e.g. "session_3" or "current" for the active session.
+    """
+    return dm_utils.read_session(session_name)
+
+@mcp.tool()
 def validate_action(action: str, character_name: str) -> str:
     """
     Validates a player's proposed action against the rules and their character state.

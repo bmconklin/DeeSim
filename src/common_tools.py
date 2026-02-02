@@ -93,6 +93,23 @@ def read_campaign_log(log_type: str) -> str:
     """
     return dm_utils.read_campaign_log(log_type)
 
+def lookup_past_session(query: str, session_name: str = None) -> str:
+    """
+    A deep memory tool to research past events.
+    
+    Modes:
+    1. Search Summaries: If session_name is None, searches ALL past session summaries for the query.
+       Example: query="Goblin King", session_name=None -> Returns which sessions mention him.
+       
+    2. Read Detail: If session_name is provided (e.g. "session_4"), reads that full session's log.
+       Example: query="IGNORED", session_name="session_4" -> Returns full text of session 4.
+    """
+    print(f"DEBUG: lookup_past_session tool invoked. Query='{query}', Session='{session_name}'")
+    if session_name:
+        return dm_utils.read_archived_history(session_name)
+    else:
+        return dm_utils.search_archived_summaries(query)
+
 def update_world_info(fact: str) -> str:
     """
     Records a PERMANENT fact about the world (NPCs, Locations, Politics).

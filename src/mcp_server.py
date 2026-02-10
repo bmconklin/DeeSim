@@ -261,5 +261,56 @@ def read_character_sheet(character_name: str) -> str:
     """
     return dm_utils.read_character_sheet(character_name)
 
+@mcp.tool()
+def lookup_past_session(query: str, session_name: str = None) -> str:
+    """
+    Research past events using Deep Memory.
+    Modes:
+    1. Search Summaries: If session_name is None, searches ALL past session summaries for the query.
+       Example: query="Goblin King", session_name=None
+    2. Read Detail: If session_name is provided, reads that full session's log.
+       Example: query="IGNORED", session_name="session_4"
+    """
+    if session_name:
+        return dm_utils.read_archived_history(session_name)
+    else:
+        return dm_utils.search_archived_summaries(query)
+
+@mcp.tool()
+def initialize_combat(entities: str) -> str:
+    """
+    Sets up the initial state for a combat encounter.
+    entities: JSON string of list of dicts, e.g. '[{"name": "Goblin 1", "hp": 7, "max_hp": 7, "ac": 15}]'
+    """
+    import json
+    try:
+        data = json.loads(entities)
+        return dm_utils.update_combat_state(data)
+    except Exception as e:
+        return f"Error parsing entities JSON: {e}"
+
+@mcp.tool()
+def track_combat_change(character_name: str, hp_change: int = 0, notes_update: str = None) -> str:
+    """
+    Updates a specific combatant's HP or notes.
+    character_name: The name of the creature to update.
+    hp_change: Amount to change HP (negative for damage, positive for healing).
+    notes_update: New notes or status effects (e.g. "Stunned").
+    """
+    # Reuse the logic from common_tools since it has the parsing logic
+    # But we can't easily import common_tools here due to potential circular deps if common_tools imports mcp_server (it doesn't, but let's be safe and copy logic or move it to dm_utils?)
+    # Actually, dm_utils only has update_combat_state, not the parsing logic.
+    # Let's import common_tools safely inside the function.
+    import common_tools
+    return common_tools.track_combat_change(character_name, hp_change, notes_update)
+
+@mcp.tool()
+def undo_last_message() -> str:
+    """
+    Removes the last (user, assistant) interaction from history.
+    Use this if the AI made a mistake or the player wants to retcon their last action.
+    """
+    return dm_utils.undo_last_message()
+
 if __name__ == "__main__":
     mcp.run()

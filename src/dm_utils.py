@@ -4,6 +4,7 @@ import requests
 import json
 import datetime
 import re
+import glob
 try:
     import google.genai as genai
     from google.genai import types
@@ -18,6 +19,71 @@ from contextvars import ContextVar
 # --- Context & Registry Management ---
 active_campaign_ctx = ContextVar("active_campaign", default=None)
 REGISTRY_PATH = os.path.join(os.getcwd(), "campaign_registry.json")
+
+# --- Deep Memory Logic ---
+def search_archived_summaries(query: str) -> str:
+    """
+    Scans all session_* folders for matches in session_log.md (the summary).
+    Returns a list of matching sessions and snippets.
+    """
+    root = get_campaign_root()
+    session_dirs = glob.glob(os.path.join(root, "session_*"))
+    
+    results = []
+    
+    print(f"DEBUG: search_archived_summaries called with query='{query}' in root='{root}'")
+    print(f"DEBUG: Found {len(session_dirs)} session directories to scan.")
+    
+    for s_dir in sorted(session_dirs):
+        log_path = os.path.join(s_dir, "session_log.md")
+        if os.path.exists(log_path):
+            try:
+                with open(log_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                    if query.lower() in content.lower():
+                        # Extract a snippet
+                        idx = content.lower().find(query.lower())
+                        start = max(0, idx - 50)
+                        end = min(len(content), idx + 100)
+                        snippet = content[start:end].replace("\n", " ")
+                        
+                        session_name = os.path.basename(s_dir)
+                        results.append(f"- **{session_name}**: ...{snippet}...")
+            except Exception as e:
+                print(f"Error reading {log_path}: {e}")
+                
+    if not results:
+        return f"No mentions of '{query}' found in past session summaries."
+        
+    return "Found mentions in past summaries:\n" + "\n".join(results) + "\n\n(Use `lookup_past_session(query=None, session_name='session_X')` to read the full history.)"
+
+def read_archived_history(session_name: str) -> str:
+    """
+    Reads the full chat history or full archive log for a specific session.
+    Prioritizes text logs if available for readability.
+    """
+    root = get_campaign_root()
+    target_dir = os.path.join(root, session_name)
+    
+    print(f"DEBUG: read_archived_history called for session='{session_name}'")
+    
+    if not os.path.exists(target_dir):
+        return f"Error: Session folder '{session_name}' not found."
+        
+    # Priority 1: Full Text Archive (Human readable)
+    archive_log = os.path.join(target_dir, "session_log_full_archive.md")
+    if os.path.exists(archive_log):
+        with open(archive_log, "r") as f:
+             return f"### Archive of {session_name}\n" + f.read()[:10000] # Cap size safely
+             
+    # Priority 2: Current Log (if it's the active session or just summary)
+    current_log = os.path.join(target_dir, "session_log.md")
+    if os.path.exists(current_log):
+         with open(current_log, "r") as f:
+             return f"### Log of {session_name}\n" + f.read()
+             
+    return f"No logs found for {session_name}."
+
 
 def get_campaign_for_channel(platform_id: str, channel_id: str) -> str:
     """Returns the campaign name bound to a specific channel."""
@@ -1185,4 +1251,11 @@ To ensure mechanical consistency and prevent narration hallucinations:
 4. **Secret Tracking**: All combat stats are stored in `secrets_log.md`. DO NOT reveal exact HP numbers to players unless they have a specific ability to see them; use descriptive terms like "bloodied" (half HP) or "near death".
 ---
 """
-    return base_prompt + naming_rules
+    return base_prompt + naming_rules + """
+## Deep Memory & History
+Your memory is not limited to the active session. The entire campaign history is available to you.
+1. **Always Check History**: If a user asks about a past event (e.g., "Who did I fight in Session 1?"), and it is not in your current summary, DO NOT say "I don't know" or "That log isn't loaded."
+2. **Use the Tool**: Call `lookup_past_session(query="...")` immediately to find the answer.
+3. **Deep Dive**: If the summary is insufficient, look up the specific session using `lookup_past_session(query="IGNORED", session_name="session_X")` to read the full transcript.
+4. **Be Authoritative**: Once you retrieve the info, treat it as something you always knew.
+"""

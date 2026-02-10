@@ -233,6 +233,7 @@ tools_list = [
     complete_setup_step, # NEW
     submit_character_sheet, # NEW
     generate_name,
+    common_tools.lookup_past_session, # NEW Deep Memory
     common_tools.initialize_combat,
     common_tools.track_combat_change
 ]

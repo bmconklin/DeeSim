@@ -9,12 +9,12 @@ NC='\033[0m'
 echo -e "${BLUE}Setting up Slackbot dependencies...${NC}"
 
 # Ensure venv exists
-if [ ! -f "venv/bin/activate" ]; then
+if [ ! -f ".venv/bin/activate" ]; then
     echo "Virtual environment not found. Running start.sh first..."
     ./start.sh
 fi
 
-source venv/bin/activate
+source .venv/bin/activate
 
 echo -e "${GREEN}Installing Slack and Google AI libraries...${NC}"
 pip install -r requirements.txt

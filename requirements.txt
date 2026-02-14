@@ -7,3 +7,4 @@ requests
 python-dotenv
 prompt_toolkit
 discord.py
+mcp

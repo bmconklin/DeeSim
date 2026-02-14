@@ -22,7 +22,7 @@ do
 done
 
 # Ensure venv exists
-if [ ! -f "venv/bin/activate" ]; then
+if [ ! -f ".venv/bin/activate" ]; then
     echo "Virtual environment not found. Running setup_slack.sh first..."
     ./setup_slack.sh
 fi
@@ -38,13 +38,13 @@ echo "🚀 Launching Agentic DM on Platform: $PLATFORM"
 case $PLATFORM in
     local)
         # Pass remaining args just in case, though we handled campaign
-        venv/bin/python3 src/play.py
+        .venv/bin/python3 src/play.py
         ;;
     slack)
-        venv/bin/python3 src/bot.py
+        .venv/bin/python3 src/bot.py
         ;;
     discord)
-        venv/bin/python3 src/discord_bot.py
+        .venv/bin/python3 src/discord_bot.py
         ;;
     *)
         echo "❌ Invalid platform: $PLATFORM"

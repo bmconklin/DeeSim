@@ -128,6 +128,24 @@ As the Admin, you can manage who joins the game dynamically:
 - [Player Guide](walkthrough.md): How to use the bot commands.
 - **[New Feature Details](file:///home/verran/dev/gemini_dm/FEATURES.md)**: Deep dive into Combat Tracking and Narration logic.
 
+## 🧠 Agent Skills & Tools
+
+The AI Dungeon Master is equipped with specialized **Skills** (workflows) and **Tools** (code functions) to handle complex game mechanics reliable.
+
+### Active Skills (Auto-Loaded)
+The agent automatically reads procedures from the `skills/` directory:
+-   **Session Architect** (`skills/session_flow`): Standard workflow for starting, recapping, and ending sessions.
+-   **Combat Manager** (`skills/run_combat`): Tactical workflow for Initiative, Turns, and HP tracking.
+-   **Quest Tracker** (`skills/manage_quests`): Persistent quest logs using `[QUEST START]` tags.
+-   **Treasure Hunter** (`skills/loot_generation`): CR-based loot tables and distribution.
+-   **Social Encounter** (`skills/social_conflict`): Dice-based rules for high-stakes NPC interactions.
+
+### Inventory System
+The agent can now track player equipment, gold, and weight:
+-   **Add Item**: `manage_inventory("add", "Sword", "Grognak", weight=3.0)`
+-   **Check Gear**: `manage_inventory("list", ..., "Grognak")`
+-   **Persistance**: Inventory is saved to `campaigns/<campaign>/inventory_<name>.json`.
+
 ## Feature Capabilities
 The bot is designed to be **Offline First**, with optional Cloud enhancements.
 

@@ -312,5 +312,39 @@ def undo_last_message() -> str:
     """
     return dm_utils.undo_last_message()
 
+@mcp.tool()
+def manage_inventory(action: str, item_name: str, quantity: int = 1, weight: float = 0.0, character_name: str = None) -> str:
+    """
+    Manages character inventory.
+    Args:
+        action: "add", "remove", "check", or "list".
+        item_name: Name of the item.
+        quantity: Amount to add/remove.
+        weight: Weight per unit (optional).
+        character_name: Who owns the item.
+    """
+    return dm_utils.manage_inventory(action, item_name, quantity, weight, character_name)
+
+@mcp.tool()
+def lookup_item_details(item_name: str) -> str:
+    """
+    Looks up an item in the D&D API to find its rarity, cost, and type.
+    """
+    return dm_utils.lookup_item_details(item_name)
+
+@mcp.tool()
+def manage_quests(action: str, title: str = None, description: str = None, status: str = None) -> str:
+    """
+    Manages quests (add/update/complete/list).
+    """
+    return dm_utils.manage_quests(action, title, description, status)
+
+@mcp.tool()
+def lookup_monster(monster_name: str) -> str:
+    """
+    Looks up a monster's stats (AC, HP, Speed, Actions) for combat.
+    """
+    return dm_utils.lookup_monster(monster_name)
+
 if __name__ == "__main__":
     mcp.run()

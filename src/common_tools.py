@@ -93,6 +93,19 @@ def read_campaign_log(log_type: str) -> str:
     """
     return dm_utils.read_campaign_log(log_type)
 
+def list_sessions() -> str:
+    """
+    Lists all session directories with metadata.
+    """
+    return dm_utils.list_sessions()
+
+def read_full_session(session_name: str = "current") -> str:
+    """
+    Reads ALL log files from a specific session combined.
+    """
+    return dm_utils.read_session(session_name)
+
+
 def lookup_past_session(query: str, session_name: str = None) -> str:
     """
     A deep memory tool to research past events.
@@ -229,3 +242,27 @@ def track_combat_change(character_name: str, hp_change: int = 0, notes_update: s
                 })
 
     return dm_utils.update_combat_state(entities)
+
+def manage_inventory(action: str, item_name: str, quantity: int = 1, weight: float = 0.0, character_name: str = None) -> str:
+    """
+    Manages character inventory (add/remove/check/list).
+    """
+    return dm_utils.manage_inventory(action, item_name, quantity, weight, character_name)
+
+def lookup_item_details(item_name: str) -> str:
+    """
+    Looks up an item in the D&D API to find its rarity, cost, and type.
+    """
+    return dm_utils.lookup_item_details(item_name)
+
+def lookup_monster(monster_name: str) -> str:
+    """
+    Looks up a monster's stats (AC, HP, Speed, Actions) for combat.
+    """
+    return dm_utils.lookup_monster(monster_name)
+
+def manage_quests(action: str, title: str = None, description: str = None, status: str = None) -> str:
+    """
+    Manages quests (add/update/complete/list).
+    """
+    return dm_utils.manage_quests(action, title, description, status)

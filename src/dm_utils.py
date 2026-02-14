@@ -1221,6 +1221,414 @@ def get_combat_state() -> str:
         
     return "Failed to parse combat state."
 
+def manage_inventory(action: str, item_name: str, quantity: int = 1, weight: float = 0.0, character_name: str = None) -> str:
+    """
+    Manages character inventory.
+    Args:
+        action: "add", "remove", "check", or "list".
+        item_name: Name of the item.
+        quantity: Amount to add/remove.
+        weight: Weight per unit (optional).
+        character_name: Who owns the item.
+    """
+    root = get_campaign_root()
+    
+    # --- Global Actions (No Character Required) ---
+    if action == "search":
+        found = []
+        item_key = item_name.strip().lower()
+        if not item_key:
+            return "Error: item_name required for search."
+            
+        for filename in os.listdir(root):
+            if filename.startswith("inventory_") and filename.endswith(".json"):
+                c_name = filename[10:-5].replace("_", " ").title() # rough reconstruction
+                try:
+                    with open(os.path.join(root, filename), "r") as f:
+                        data = json.load(f)
+                    # Search keys (case insensitive)
+                    for k, v in data.items():
+                        if item_key in k.lower():
+                            found.append(f"- **{c_name}**: {v['quantity']}x {k}")
+                except:
+                    continue
+        
+        if not found:
+            return f"No items found matching '{item_name}' in any inventory."
+        return "\n".join(["### 🔍 Item Search Results"] + found)
+
+    # --- Character Specific Actions ---
+    if not character_name:
+        return "Error: Character name required."
+    
+    safe_name = re.sub(r'[^a-zA-Z0-9]', '_', character_name.lower())
+    inv_file = os.path.join(root, f"inventory_{safe_name}.json")
+    
+    inventory = {}
+    if os.path.exists(inv_file):
+        try:
+            with open(inv_file, "r") as f:
+                inventory = json.load(f)
+        except Exception as e:
+            return f"Error loading inventory: {e}"
+            
+    # Normalize Item Name
+    item_key = item_name.strip()
+    
+    if action == "add":
+        if item_key in inventory:
+            inventory[item_key]["quantity"] += quantity
+            # Update weight if provided (otherwise keep existing)
+            if weight > 0:
+                inventory[item_key]["weight"] = weight
+        else:
+            inventory[item_key] = {"quantity": quantity, "weight": weight}
+            
+        msg = f"Added {quantity}x {item_name} to {character_name}'s inventory."
+        
+    elif action == "remove":
+        if item_key not in inventory:
+            return f"{character_name} does not have {item_name}."
+            
+        current_qty = inventory[item_key]["quantity"]
+        if quantity >= current_qty:
+            del inventory[item_key]
+            msg = f"Removed all {item_name} from {character_name}."
+        else:
+            inventory[item_key]["quantity"] -= quantity
+            msg = f"Removed {quantity}x {item_name} from {character_name}. Remaining: {inventory[item_key]['quantity']}."
+            
+    elif action == "check":
+        if item_key in inventory:
+            data = inventory[item_key]
+            return f"{character_name} has {data['quantity']}x {item_name} (Weight: {data['weight']*data['quantity']:.1f})."
+        else:
+            return f"{character_name} does not have {item_name}."
+            
+    elif action == "list":
+        if not inventory:
+            return f"{character_name}'s inventory is empty."
+            
+        lines = [f"**{character_name}'s Inventory:**"]
+        total_weight = 0.0
+        for name, data in inventory.items():
+            qty = data["quantity"]
+            wt = data.get("weight", 0) * qty
+            total_weight += wt
+            lines.append(f"- {qty}x {name} ({wt:.1f} lbs)")
+            
+        lines.append(f"**Total Weight:** {total_weight:.1f} lbs")
+        return "\n".join(lines)
+    else:
+        return f"Unknown action: {action}"
+        
+    # Save Logic (for add/remove)
+    try:
+        with open(inv_file, "w") as f:
+            json.dump(inventory, f, indent=2)
+        return msg
+    except Exception as e:
+        return f"Error saving inventory: {e}"
+
+def lookup_item_details(item_name: str) -> str:
+    """
+    Looks up an item in the D&D API to find its rarity, cost, and type.
+    """
+    import dnd_bridge
+    
+    # 1. Search for the item
+    results = dnd_bridge.search_dnd_rules(item_name)
+    
+    if "error" in results:
+        return f"Error looking up item: {results['error']}"
+        
+    # Check top results across categories
+    top = results.get("top_results", [])
+    if not top:
+        return f"No items found matching '{item_name}'."
+        
+    # Find the best ITEM match (equipment or magic-items)
+    best_item = None
+    
+    # Priority 1: Check top results for equipment/magic-items
+    for match in top:
+        cat = match.get("category")
+        if cat in ["equipment", "magic-items"]:
+            # We need the full details which are in the 'results' dict, not just the top_results summary
+            # But wait, search_all_categories returns 'results' indexed by category
+            # Let's look there using the index from top_results
+            target_index = match.get("index")
+            try:
+                items_in_cat = results["results"][cat]["items"]
+                for i in items_in_cat:
+                    if i["index"] == target_index:
+                        best_item = i
+                        best_item["category"] = cat
+                        break
+            except:
+                continue
+        if best_item: break
+            
+    # Priority 2: If no top result is an item, scan the full results for ANY item
+    if not best_item:
+        for cat in ["magic-items", "equipment"]:
+            if cat in results.get("results", {}):
+                items = results["results"][cat].get("items", [])
+                if items:
+                    best_item = items[0]
+                    best_item["category"] = cat
+                    break
+                    
+    if not best_item:
+        return f"No equipment or magic items found for '{item_name}'."
+        
+    # 3. Extract Details
+    details = best_item.get("details", {})
+    name = best_item.get("name")
+    category = best_item.get("category")
+    
+    # Rarity
+    rarity = "Unknown"
+    if "rarity" in details:
+        rarity = details["rarity"].get("name", "Unknown")
+        
+    # Type / Subcategory
+    item_type = "Item"
+    if "equipment_category" in details:
+        item_type = details["equipment_category"].get("name", "Equipment")
+    if "card_type" in details: # Just in case
+        item_type = details["card_type"]
+        
+    # Cost (for Equipment)
+    cost_str = "N/A"
+    if "cost" in details:
+        cost_str = f"{details['cost']['quantity']} {details['cost']['unit']}"
+        
+    # Description (Snippet)
+    desc = "No description."
+    if "desc" in details:
+        if isinstance(details["desc"], list):
+            desc = " ".join(details["desc"])
+        else:
+            desc = str(details["desc"])
+    
+    # Formatted Output
+    return f"""**{name}**
+- **Type**: {item_type}
+- **Rarity**: {rarity}
+- **Cost**: {cost_str}
+- **Description**: {desc[:200]}..."""
+
+def manage_quests(action: str, title: str = None, description: str = None, status: str = None) -> str:
+    """
+    Manages campaign quests.
+    Args:
+        action: "add", "update", "complete", "list".
+        title: Quest title (required for add/update/complete).
+        description: Quest objective or update notes.
+        status: "Active", "Completed", "Failed" (for update).
+    """
+    root = get_campaign_root()
+    quest_file = os.path.join(root, "quests.json")
+    
+    quests = {}
+    if os.path.exists(quest_file):
+        try:
+            with open(quest_file, "r") as f:
+                quests = json.load(f)
+        except:
+            pass
+            
+    if action == "list":
+        if not quests:
+            return "No quests found."
+        
+        active = []
+        completed = []
+        for q_title, q_data in quests.items():
+            line = f"- **{q_title}**: {q_data['description']} ({q_data['status']})"
+            if q_data["status"] == "Active":
+                active.append(line)
+            else:
+                completed.append(line)
+                
+        output = []
+        if active:
+            output.append("### 🛡️ Active Quests")
+            output.extend(active)
+        if completed:
+            output.append("\n### ✅ Completed Quests")
+            output.extend(completed)
+            
+        return "\n".join(output)
+        
+    # For modifiers, title is required
+    if not title:
+        return "Error: Quest title required."
+        
+    title_key = title.strip()
+    
+    if action == "add":
+        if title_key in quests:
+            return f"Quest '{title}' already exists."
+        quests[title_key] = {
+            "description": description or "No description",
+            "status": "Active",
+            "log": [f"Started: {description}"]
+        }
+        msg = f"Quest added: {title}"
+        
+    elif action == "update":
+        if title_key not in quests:
+            return f"Quest '{title}' not found."
+            
+        if description:
+            quests[title_key]["description"] = description
+            quests[title_key]["log"].append(f"Update: {description}")
+        if status:
+            quests[title_key]["status"] = status
+            quests[title_key]["log"].append(f"Status changed to {status}")
+        msg = f"Quest updated: {title}"
+        
+    elif action == "complete":
+        if title_key not in quests:
+            return f"Quest '{title}' not found."
+        quests[title_key]["status"] = "Completed"
+        quests[title_key]["log"].append("Completed!")
+        msg = f"Quest completed: {title}"
+        
+    else:
+        return f"Unknown action: {action}"
+        
+    try:
+        with open(quest_file, "w") as f:
+            json.dump(quests, f, indent=2)
+        return msg
+    except Exception as e:
+        return f"Error saving quests: {e}"
+
+def lookup_monster(monster_name: str) -> str:
+    """
+    Looks up a monster's stats for combat.
+    """
+    import dnd_bridge
+    
+    # 1. Search for the monster
+    results = dnd_bridge.search_dnd_rules(monster_name)
+    
+    if "error" in results:
+        return f"Error looking up monster: {results['error']}"
+        
+    # Check top results
+    top = results.get("top_results", [])
+    if not top:
+        return f"No monsters found matching '{monster_name}'."
+        
+    best_match = None
+    
+    # Priority 1: Check top results for monsters
+    for match in top:
+        if match.get("category") == "monsters":
+            target_index = match.get("index")
+            try:
+                items_in_cat = results["results"]["monsters"]["items"]
+                for i in items_in_cat:
+                    if i["index"] == target_index:
+                        best_match = i
+                        break
+            except:
+                continue
+        if best_match: break
+    
+    if not best_match:
+         # Priority 2: Scan full results
+         if "monsters" in results.get("results", {}):
+             items = results["results"]["monsters"].get("items", [])
+             if items:
+                 best_match = items[0]
+                 
+    if not best_match:
+        return f"No monster stats found for '{monster_name}'."
+
+    # Extract Stats
+    details = best_match.get("details", {})
+    name = best_match.get("name")
+    
+    size = details.get("size", "Medium")
+    type_ = details.get("type", "Unknown")
+    ac = 10
+    if "armor_class" in details:
+        ac_data = details["armor_class"]
+        if isinstance(ac_data, list) and ac_data:
+            ac = ac_data[0].get("value", 10)
+            
+    hp = details.get("hit_points", 0)
+    hit_dice = details.get("hit_dice", "1d8")
+    
+    speed = "30 ft."
+    if "speed" in details:
+        speed_str = []
+        for k, v in details["speed"].items():
+            speed_str.append(f"{k}: {v}")
+        speed = ", ".join(speed_str)
+        
+    # Actions
+    actions = []
+    if "actions" in details:
+        for act in details["actions"]:
+            act_name = act.get("name", "Unknown")
+            desc = act.get("desc", "")
+            actions.append(f"- **{act_name}**: {desc[:150]}...")
+            
+    # Format
+    return f"""**{name}**
+- **Size/Type**: {size} {type_}
+- **AC**: {ac} | **HP**: {hp} ({hit_dice})
+- **Speed**: {speed}
+- **Actions**:
+{chr(10).join(actions[:3])}
+..."""
+
+
+def load_skills_content() -> str:
+    """
+    Scans the skills/ directory for SKILL.md files and formats them for the prompt.
+    """
+    root = get_campaign_root()
+    # Assuming skills/ is at the project root, not campaign root
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    skills_dir = os.path.join(project_root, "skills")
+    
+    if not os.path.exists(skills_dir):
+        return ""
+        
+    skill_content = "\n\n## Specialized Skills\nYou have access to the following specialized workflows. Use them when applicable:\n"
+    
+    # Simple walk
+    count = 0
+    for root_dir, dirs, files in os.walk(skills_dir):
+        if "SKILL.md" in files:
+            try:
+                path = os.path.join(root_dir, "SKILL.md")
+                with open(path, "r") as f:
+                    content = f.read()
+                    # Clean up frontmatter if present (between ---)
+                    if content.startswith("---"):
+                        parts = content.split("---", 2)
+                        if len(parts) >= 3:
+                            content = parts[2].strip()
+                            
+                    folder_name = os.path.basename(root_dir)
+                    skill_content += f"\n### Skill: {folder_name.replace('_', ' ').title()}\n{content}\n"
+                    count += 1
+            except Exception as e:
+                print(f"Error loading skill {path}: {e}")
+                
+    if count == 0:
+        return ""
+        
+    return skill_content
+
 def get_system_instruction():
     session_dir = get_current_session_dir()
     # Check session dir first, then campaign root
@@ -1251,7 +1659,9 @@ To ensure mechanical consistency and prevent narration hallucinations:
 4. **Secret Tracking**: All combat stats are stored in `secrets_log.md`. DO NOT reveal exact HP numbers to players unless they have a specific ability to see them; use descriptive terms like "bloodied" (half HP) or "near death".
 ---
 """
-    return base_prompt + naming_rules + """
+    skills_section = load_skills_content()
+    
+    return base_prompt + naming_rules + skills_section + """
 ## Deep Memory & History
 Your memory is not limited to the active session. The entire campaign history is available to you.
 1. **Always Check History**: If a user asks about a past event (e.g., "Who did I fight in Session 1?"), and it is not in your current summary, DO NOT say "I don't know" or "That log isn't loaded."

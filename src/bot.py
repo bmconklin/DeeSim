@@ -420,7 +420,7 @@ def handle_hide_command(message, say):
     """
     User rejects the pending image.
     """
-    say(f"🗑️ {result}")
+    say("🗑️ Image cancelled.")
 
 
 @app.message(re.compile("^!wrapup"))

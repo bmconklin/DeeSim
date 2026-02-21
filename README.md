@@ -7,7 +7,8 @@ An AI-powered Dungeon Master that runs locally on your machine, connects to **Di
 
 ### Core Engine
 - **Fair Dice**: The bot cannot fake rolls. It commits to a DC/Consequence *before* asking you to roll.
-- **Persistent Memory**: Uses local Markdown files to track the campaign.
+- **Persistent Memory**: Uses a hybrid architecture of **SQLite** (for players, quests, and inventory) and **ChromaDB** (for semantic vector search of chat history) stored locally in your active campaign folder.
+  - *Note on Security: ChromaDB uses a small, open-source embedding model (`all-MiniLM-L6-v2`) to process text. The Docker image pre-downloads this to avoid any unexpected runtime network requests.*
 - **Anti-Hallucination**: Checks a local rules file before creating rulings.
 - **High-Fidelity Narration**: Captures and aggregates all DM dialogue across complex turns (e.g., between dice rolls).
 - **Combat Stat Tracking**: Maintains persistent enemy HP, AC, and resource tracking in `secrets_log.md` to prevent mid-battle hallucinations.

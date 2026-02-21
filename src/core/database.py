@@ -41,6 +41,15 @@ def init_db():
             )
         ''')
         
+        # Character Sheets Table (Unstructured text like stats/backstory)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS character_sheets (
+                character_name TEXT PRIMARY KEY,
+                details_text TEXT NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
         # Inventory Table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS inventory (

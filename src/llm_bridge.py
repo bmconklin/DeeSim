@@ -157,7 +157,7 @@ class LocalChatSession:
                         final_ai_text += "\n\n" + ai_text
                     else:
                         final_ai_text = ai_text
-                    print(f"🤖 AI Thought: {ai_text[:50]}...")
+                    # print(f"🤖 AI Thought: {ai_text[:50]}...")
                 
                 # 3. Handle Tool Calls
                 if tool_calls:
@@ -170,12 +170,15 @@ class LocalChatSession:
                         print(f"🛠️ Tool Call: {func_name}({args})")
                         
                         if func_name in self.tool_map:
+                            import dm_utils
                             try:
                                 func = self.tool_map[func_name]
                                 result = func(**args)
                                 tool_output = str(result)
+                                dm_utils.log_system_tool_call(func_name, args, tool_output)
                             except Exception as e:
                                 tool_output = f"Error executing {func_name}: {e}"
+                                dm_utils.log_system_tool_call(func_name, args, tool_output)
                         else:
                             tool_output = f"Error: Tool {func_name} not found."
                             
@@ -281,7 +284,7 @@ class ClaudeChatSession:
             
             for block in content_blocks:
                 if block.type == "text":
-                    print(f"🤖 Claude Thought: {block.text[:50]}...")
+                    # print(f"🤖 Claude Thought: {block.text[:50]}...")
                     text_part += block.text
                     final_text += block.text
                 
@@ -294,12 +297,15 @@ class ClaudeChatSession:
                     print(f"🛠️ Tool Call: {func_name}({args})")
                     
                     if func_name in self.tool_map:
+                        import dm_utils
                         try:
                             func = self.tool_map[func_name]
                             result = func(**args)
                             tool_output = str(result)
+                            dm_utils.log_system_tool_call(func_name, args, tool_output)
                         except Exception as e:
                             tool_output = f"Error executing {func_name}: {e}"
+                            dm_utils.log_system_tool_call(func_name, args, tool_output)
                     else:
                         tool_output = f"Error: Tool {func_name} not found."
                         
@@ -411,7 +417,7 @@ class GoogleChatSession:
                     final_text += "\n\n" + response.text
                 else:
                     final_text = response.text
-                print(f"🤖 [Google] AI Thought: {response.text[:50]}...")
+                # print(f"🤖 [Google] AI Thought: {response.text[:50]}...")
 
             # 2. Check for tool calls
             tool_calls = []
@@ -432,14 +438,17 @@ class GoogleChatSession:
                 print(f"🛠️ [Google] Tool Call Attempt: {func_name}({args})")
                 
                 if func_name in self.tool_map:
+                    import dm_utils
                     try:
                         func = self.tool_map[func_name]
                         result = func(**args)
                         print(f"   -> Tool Execution Success: {str(result)[:100]}...")
                         tool_output = result
+                        dm_utils.log_system_tool_call(func_name, args, str(tool_output))
                     except Exception as e:
                         print(f"   -> Tool Execution Error: {e}")
                         tool_output = {"error": f"Error executing {func_name}: {e}"}
+                        dm_utils.log_system_tool_call(func_name, args, str(tool_output))
                 else:
                     print(f"   -> Tool Not Found: {func_name}")
                     tool_output = {"error": f"Error: Tool {func_name} not found."}

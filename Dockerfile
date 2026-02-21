@@ -30,5 +30,8 @@ ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
+# Pre-download the ChromaDB embedding model to prevent unexpected downloads at runtime
+RUN python -c "from chromadb.utils.embedding_functions import DefaultEmbeddingFunction; DefaultEmbeddingFunction()(['init'])"
+
 # Run the launcher
 CMD ["python", "launcher.py"]

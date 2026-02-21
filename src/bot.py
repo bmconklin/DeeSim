@@ -1,5 +1,10 @@
 import os
 import sys
+
+# Suppress harmless ONNX C++ and tokenizer warnings for Apple Silicon
+os.environ["ONNXRUNTIME_LOG_LEVEL"] = "3"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 from dotenv import load_dotenv
 
 # Load env vars BEFORE importing dm_utils to ensure CAMPAIGN_ROOT is picked up
@@ -149,7 +154,7 @@ def send_dm(character_name: str, message: str) -> str:
 
 def update_world_info(fact: str) -> str:
     """
-    Records a PERMANENT fact about the world (NPCs, Locations, Politics).
+    Records a PERMANENT fact about the world (NPCs, Locations, Politics) to `world_info.md`.
     fact: "The shopkeeper's name is Gundren."
     """
     return dm_utils.update_world_info(fact)
@@ -196,7 +201,7 @@ def complete_setup_step() -> str:
 
 def submit_character_sheet(character_name: str, details: str) -> str:
     """
-    Saves a player's character sheet details.
+    Saves a player's character sheet details to the SQLite database.
     Call this when a player provides their stats/backstory during setup.
     """
     return dm_utils.save_character_sheet(character_name, details)

@@ -40,7 +40,6 @@ from core.state_manager import (
     undo_last_message,
     log_to_file,
     get_hours_since_last_message,
-    get_context_buffer_path,
     append_to_context_buffer,
     get_and_clear_context_buffer
 )
@@ -142,9 +141,6 @@ def request_player_roll_logic(check_type: str, dc: int, consequence: str) -> str
     return "Logged DC and Consequence. You may now ask the player to roll."
 
 from core.players import (
-    get_player_mapping_path,
-    load_player_mapping,
-    save_player_mapping,
     register_player,
     get_character_name,
     get_user_id_by_character_name
@@ -704,48 +700,53 @@ def get_setup_instructions(step: int) -> str:
 
 def save_character_sheet(name: str, details_text: str) -> str:
     """
-    Saves unstructured character details to a file for reference.
+    Saves unstructured character details to the database for reference.
     """
-    sheets_dir = os.path.join(get_campaign_root(), "character_sheets")
-    os.makedirs(sheets_dir, exist_ok=True)
+    from core.database import get_db_connection
+    safe_name = name.strip()
     
-    safe_name = "".join(x for x in name if x.isalnum() or x in (' ', '_', '-')).strip()
-    path = os.path.join(sheets_dir, f"{safe_name}.txt")
-    
-    with open(path, "w") as f:
-        f.write(f"Character Sheet: {name}\n")
-        f.write(f"Recorded: {datetime.datetime.now().isoformat()}\n")
-        f.write("-------------------------------------------\n")
-        f.write(details_text)
-        
-    return f"Saved character sheet for {name}."
+    with get_db_connection() as conn:
+        conn.execute('''
+            INSERT INTO character_sheets (character_name, details_text) 
+            VALUES (?, ?) 
+            ON CONFLICT(character_name) DO UPDATE SET 
+            details_text=excluded.details_text, 
+            updated_at=CURRENT_TIMESTAMP
+        ''', (safe_name, details_text))
+            
+    return f"Saved character sheet for {safe_name}."
 
 def list_character_sheets() -> str:
     """
     Returns a list of all saved character sheet names for the active campaign.
     """
-    sheets_dir = os.path.join(get_campaign_root(), "character_sheets")
-    if not os.path.isdir(sheets_dir):
-        return "No character sheets found. The character_sheets directory does not exist."
-
-    files = [f for f in os.listdir(sheets_dir) if f.endswith(".txt")]
-    if not files:
+    from core.database import get_db_connection
+    
+    with get_db_connection() as conn:
+        cursor = conn.execute("SELECT character_name FROM character_sheets ORDER BY character_name")
+        rows = cursor.fetchall()
+        
+    if not rows:
         return "No character sheets found."
-
-    names = [os.path.splitext(f)[0] for f in sorted(files)]
-    return "Characters:\n" + "\n".join(f"- {name}" for name in names)
+        
+    names = [row["character_name"] for row in rows]
+    return "Characters:\n" + "\n".join(f"- {n}" for n in names)
 
 def read_character_sheet(name: str) -> str:
     """
     Reads and returns the full contents of a specific character's sheet.
     """
-    sheets_dir = os.path.join(get_campaign_root(), "character_sheets")
-    safe_name = "".join(x for x in name if x.isalnum() or x in (' ', '_', '-')).strip()
-    path = os.path.join(sheets_dir, f"{safe_name}.txt")
-
-    if not os.path.exists(path):
+    from core.database import get_db_connection
+    
+    with get_db_connection() as conn:
+        cursor = conn.execute("SELECT details_text, updated_at FROM character_sheets WHERE character_name = ?", (name.strip(),))
+        row = cursor.fetchone()
+        
+    if not row:
         available = list_character_sheets()
         return f"No character sheet found for '{name}'.\n{available}"
+        
+    return f"Character Sheet: {name.strip()}\nLast Updated: {row['updated_at']}\n-------------------------------------------\n{row['details_text']}"
 
     with open(path, "r") as f:
         return f.read()
@@ -869,7 +870,7 @@ def get_combat_state() -> str:
 
 from core.database import get_db_connection
 
-def manage_inventory(action: str, item_name: str, quantity: int = 1, weight: float = 0.0, character_name: str = None) -> str:
+def manage_inventory(action: str, item_name: str = "", quantity: int = 1, weight: float = 0.0, character_name: str = None) -> str:
     """
     Manages character inventory using SQLite.
     Args:
@@ -1073,93 +1074,85 @@ def lookup_item_details(item_name: str) -> str:
 - **Cost**: {cost_str}
 - **Description**: {desc[:200]}..."""
 
-def manage_quests(action: str, title: str = None, description: str = None, status: str = None) -> str:
+def manage_quests(action: str, title: str = "", description: str = None, status: str = None) -> str:
     """
-    Manages campaign quests.
+    Manages campaign quests using SQLite.
     Args:
         action: "add", "update", "complete", "list".
         title: Quest title (required for add/update/complete).
         description: Quest objective or update notes.
         status: "Active", "Completed", "Failed" (for update).
     """
-    root = get_campaign_root()
-    quest_file = os.path.join(root, "quests.json")
-    
-    quests = {}
-    if os.path.exists(quest_file):
-        try:
-            with open(quest_file, "r") as f:
-                quests = json.load(f)
-        except:
-            pass
-            
     if action == "list":
-        if not quests:
-            return "No quests found."
-        
-        active = []
-        completed = []
-        for q_title, q_data in quests.items():
-            line = f"- **{q_title}**: {q_data['description']} ({q_data['status']})"
-            if q_data["status"] == "Active":
-                active.append(line)
-            else:
-                completed.append(line)
-                
-        output = []
-        if active:
-            output.append("### 🛡️ Active Quests")
-            output.extend(active)
-        if completed:
-            output.append("\n### ✅ Completed Quests")
-            output.extend(completed)
+        with get_db_connection() as conn:
+            cursor = conn.execute("SELECT title, description, status FROM quests")
+            rows = cursor.fetchall()
             
-        return "\n".join(output)
-        
+            if not rows:
+                return "No quests found."
+                
+            active = []
+            completed = []
+            for row in rows:
+                line = f"- **{row['title']}**: {row['description']} ({row['status']})"
+                if row['status'] == 'Active':
+                    active.append(line)
+                else:
+                    completed.append(line)
+                    
+            output = []
+            if active:
+                output.append("### 🛡️ Active Quests")
+                output.extend(active)
+            if completed:
+                output.append("\n### ✅ Completed Quests")
+                output.extend(completed)
+                
+            return "\n".join(output)
+
     # For modifiers, title is required
     if not title:
         return "Error: Quest title required."
         
     title_key = title.strip()
     
-    if action == "add":
-        if title_key in quests:
-            return f"Quest '{title}' already exists."
-        quests[title_key] = {
-            "description": description or "No description",
-            "status": "Active",
-            "log": [f"Started: {description}"]
-        }
-        msg = f"Quest added: {title}"
-        
-    elif action == "update":
-        if title_key not in quests:
-            return f"Quest '{title}' not found."
+    with get_db_connection() as conn:
+        if action == "add":
+            cursor = conn.execute("SELECT id FROM quests WHERE title = ?", (title_key,))
+            if cursor.fetchone():
+                return f"Quest '{title}' already exists."
+                
+            conn.execute(
+                "INSERT INTO quests (title, description, status) VALUES (?, ?, ?)",
+                (title_key, description or "No description", "Active")
+            )
+            return f"Quest added: {title}"
             
-        if description:
-            quests[title_key]["description"] = description
-            quests[title_key]["log"].append(f"Update: {description}")
-        if status:
-            quests[title_key]["status"] = status
-            quests[title_key]["log"].append(f"Status changed to {status}")
-        msg = f"Quest updated: {title}"
-        
-    elif action == "complete":
-        if title_key not in quests:
-            return f"Quest '{title}' not found."
-        quests[title_key]["status"] = "Completed"
-        quests[title_key]["log"].append("Completed!")
-        msg = f"Quest completed: {title}"
-        
-    else:
-        return f"Unknown action: {action}"
-        
-    try:
-        with open(quest_file, "w") as f:
-            json.dump(quests, f, indent=2)
-        return msg
-    except Exception as e:
-        return f"Error saving quests: {e}"
+        elif action == "update":
+            cursor = conn.execute("SELECT description, status FROM quests WHERE title = ?", (title_key,))
+            row = cursor.fetchone()
+            if not row:
+                return f"Quest '{title}' not found."
+                
+            new_desc = description if description is not None else row['description']
+            new_status = status if status is not None else row['status']
+            
+            conn.execute(
+                "UPDATE quests SET description = ?, status = ? WHERE title = ?",
+                (new_desc, new_status, title_key)
+            )
+            return f"Quest updated: {title}"
+            
+        elif action == "complete":
+            cursor = conn.execute("SELECT id FROM quests WHERE title = ?", (title_key,))
+            if not cursor.fetchone():
+                return f"Quest '{title}' not found."
+                
+            conn.execute("UPDATE quests SET status = 'Completed' WHERE title = ?", (title_key,))
+            return f"Quest completed: {title}"
+            
+        else:
+            return f"Unknown action: {action}"
 
 def lookup_monster(monster_name: str) -> str:
     """

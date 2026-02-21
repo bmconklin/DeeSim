@@ -5,6 +5,11 @@ import datetime
 from core.campaign import get_campaign_root, get_current_session_dir
 
 from core.database import get_db_connection
+
+# Suppress harmless ONNX C++ warnings for Apple Silicon (and avoid tokenizer parallelism warnings)
+os.environ["ONNXRUNTIME_LOG_LEVEL"] = "3"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 import chromadb
 from chromadb.config import Settings
 

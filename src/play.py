@@ -1,9 +1,13 @@
 import os
 import sys
 import json
+
+# Suppress harmless ONNX C++ and tokenizer warnings for Apple Silicon
+os.environ["ONNXRUNTIME_LOG_LEVEL"] = "3"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 from dotenv import load_dotenv
 
-# Load Env
 # Load Env
 load_dotenv()
 

@@ -110,13 +110,13 @@ def read_full_session(session_name: str = "current") -> str:
     return dm_utils.read_session(session_name)
 
 
-def lookup_past_session(query: str, session_name: str = None) -> str:
+def lookup_past_session(query: str, session_name: str = "") -> str:
     """
-    A deep memory tool to research past events.
+    A deep memory tool to research past events across all previous sessions using ChromaDB semantic search.
     
     Modes:
-    1. Search Summaries: If session_name is None, searches ALL past session summaries for the query.
-       Example: query="Goblin King", session_name=None -> Returns which sessions mention him.
+    1. Search Summaries: If session_name is empty (""), searches ALL past session summaries for the query.
+       Example: query="Goblin King", session_name="" -> Returns which sessions mention him.
        
     2. Read Detail: If session_name is provided (e.g. "session_4"), reads that full session's log.
        Example: query="IGNORED", session_name="session_4" -> Returns full text of session 4.
@@ -129,7 +129,7 @@ def lookup_past_session(query: str, session_name: str = None) -> str:
 
 def update_world_info(fact: str) -> str:
     """
-    Records a PERMANENT fact about the world (NPCs, Locations, Politics).
+    Records a PERMANENT fact about the world (NPCs, Locations, Politics) to `world_info.md`.
     fact: "The shopkeeper's name is Gundren."
     """
     return dm_utils.update_world_info(fact)
@@ -249,7 +249,10 @@ def track_combat_change(character_name: str, hp_change: int = 0, notes_update: s
 
 def manage_inventory(action: str, item_name: str, quantity: int = 1, weight: float = 0.0, character_name: str = None) -> str:
     """
-    Manages character inventory (add/remove/check/list).
+    Manages character inventory in the SQLite database.
+    action: Must be exactly "add", "remove", "list", or "check".
+    item_name: The name of the item.
+    character_name: The owner. If None, it applies to the party inventory.
     """
     return dm_utils.manage_inventory(action, item_name, quantity, weight, character_name)
 
@@ -267,6 +270,10 @@ def lookup_monster(monster_name: str) -> str:
 
 def manage_quests(action: str, title: str = None, description: str = None, status: str = None) -> str:
     """
-    Manages quests (add/update/complete/list).
+    Manages quests in the SQLite database. 
+    action: Must be exactly "add", "update", "complete", or "list".
+    title: The unique quest identifier.
+    description: Details of the quest (optional for list/complete).
+    status: Usually 'Active' or 'Completed' (optional).
     """
     return dm_utils.manage_quests(action, title, description, status)

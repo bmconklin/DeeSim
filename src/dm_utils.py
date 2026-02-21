@@ -16,101 +16,36 @@ except ImportError:
     fn = None  # fantasynames requires typed-ast, unavailable on Python 3.13+
 from contextvars import ContextVar
 
-# --- Context & Registry Management ---
-active_campaign_ctx = ContextVar("active_campaign", default=None)
-REGISTRY_PATH = os.path.join(os.getcwd(), "campaign_registry.json")
+from core.campaign import (
+    active_campaign_ctx,
+    REGISTRY_PATH,
+    get_campaign_for_channel,
+    bind_channel_to_campaign,
+    set_active_campaign,
+    CAMPAIGNS_DIR,
+    ACTIVE_CAMPAIGN,
+    get_campaign_root,
+    get_campaign_config,
+    get_current_session_dir
+)
 
 # --- Deep Memory Logic ---
-def search_archived_summaries(query: str) -> str:
-    """
-    Scans all session_* folders for matches in session_log.md (the summary).
-    Returns a list of matching sessions and snippets.
-    """
-    root = get_campaign_root()
-    session_dirs = glob.glob(os.path.join(root, "session_*"))
-    
-    results = []
-    
-    print(f"DEBUG: search_archived_summaries called with query='{query}' in root='{root}'")
-    print(f"DEBUG: Found {len(session_dirs)} session directories to scan.")
-    
-    for s_dir in sorted(session_dirs):
-        log_path = os.path.join(s_dir, "session_log.md")
-        if os.path.exists(log_path):
-            try:
-                with open(log_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-                    if query.lower() in content.lower():
-                        # Extract a snippet
-                        idx = content.lower().find(query.lower())
-                        start = max(0, idx - 50)
-                        end = min(len(content), idx + 100)
-                        snippet = content[start:end].replace("\n", " ")
-                        
-                        session_name = os.path.basename(s_dir)
-                        results.append(f"- **{session_name}**: ...{snippet}...")
-            except Exception as e:
-                print(f"Error reading {log_path}: {e}")
-                
-    if not results:
-        return f"No mentions of '{query}' found in past session summaries."
-        
-    return "Found mentions in past summaries:\n" + "\n".join(results) + "\n\n(Use `lookup_past_session(query=None, session_name='session_X')` to read the full history.)"
-
-def read_archived_history(session_name: str) -> str:
-    """
-    Reads the full chat history or full archive log for a specific session.
-    Prioritizes text logs if available for readability.
-    """
-    root = get_campaign_root()
-    target_dir = os.path.join(root, session_name)
-    
-    print(f"DEBUG: read_archived_history called for session='{session_name}'")
-    
-    if not os.path.exists(target_dir):
-        return f"Error: Session folder '{session_name}' not found."
-        
-    # Priority 1: Full Text Archive (Human readable)
-    archive_log = os.path.join(target_dir, "session_log_full_archive.md")
-    if os.path.exists(archive_log):
-        with open(archive_log, "r") as f:
-             return f"### Archive of {session_name}\n" + f.read()[:10000] # Cap size safely
-             
-    # Priority 2: Current Log (if it's the active session or just summary)
-    current_log = os.path.join(target_dir, "session_log.md")
-    if os.path.exists(current_log):
-         with open(current_log, "r") as f:
-             return f"### Log of {session_name}\n" + f.read()
-             
-    return f"No logs found for {session_name}."
+from core.state_manager import (
+    search_archived_summaries,
+    read_archived_history,
+    get_chat_history_path,
+    load_chat_snapshot,
+    prune_empty_fields,
+    save_chat_snapshot,
+    undo_last_message,
+    log_to_file,
+    get_hours_since_last_message,
+    get_context_buffer_path,
+    append_to_context_buffer,
+    get_and_clear_context_buffer
+)
 
 
-def get_campaign_for_channel(platform_id: str, channel_id: str) -> str:
-    """Returns the campaign name bound to a specific channel."""
-    if not os.path.exists(REGISTRY_PATH):
-        return None
-    try:
-        with open(REGISTRY_PATH, "r") as f:
-            registry = json.load(f)
-        return registry.get(f"{platform_id}:{channel_id}")
-    except:
-        return None
-
-def bind_channel_to_campaign(platform_id: str, channel_id: str, campaign_name: str):
-    """Binds a platform/channel to a campaign folder."""
-    registry = {}
-    if os.path.exists(REGISTRY_PATH):
-        try:
-            with open(REGISTRY_PATH, "r") as f:
-                registry = json.load(f)
-        except: pass
-    registry[f"{platform_id}:{channel_id}"] = campaign_name
-    with open(REGISTRY_PATH, "w") as f:
-        json.dump(registry, f, indent=2)
-
-def set_active_campaign(campaign_name: str):
-    """Sets the campaign context for the current thread/task."""
-    return active_campaign_ctx.set(campaign_name)
 
 def download_slack_file(url: str, token: str) -> bytes:
     """
@@ -152,205 +87,15 @@ def download_slack_file(url: str, token: str) -> bytes:
     except Exception as e:
         print(f"Error downloading file: {e}")
         return None
-def get_chat_history_path():
-    session_dir = get_current_session_dir()
-    return os.path.join(session_dir, "chat_history.json")
 
-def load_chat_snapshot() -> list:
-    """
-    Loads proper JSON history for the API.
-    """
-    path = get_chat_history_path()
-    if os.path.exists(path):
-        try:
-            with open(path, "r") as f:
-                return json.load(f)
-        except json.JSONDecodeError:
-            return []
-    return []
 
-def prune_empty_fields(data):
-    """Recursively remove empty dictionaries, lists, or None values."""
-    if isinstance(data, dict):
-        return {k: prune_empty_fields(v) for k, v in data.items() if v not in [None, "", [], {}]}
-    elif isinstance(data, list):
-        return [prune_empty_fields(v) for v in data if v not in [None, "", [], {}]]
-    else:
-        return data
+from dnd.dice import roll_dice
 
-def save_chat_snapshot(history_data: list):
-    """
-    Overwrites chat history with the latest list of dicts.
-    Prunes empty fields (None, [], {}) to keep the file lean.
-    """
-    path = get_chat_history_path()
-    # Ensure directory exists just in case
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    
-    # Serialize objects if needed
-    serializable_history = []
-    for msg in history_data:
-        if isinstance(msg, dict):
-            serializable_history.append(msg)
-        elif hasattr(msg, "model_dump"):
-            serializable_history.append(msg.model_dump(mode='json'))
-        elif hasattr(msg, "to_dict"):
-            serializable_history.append(msg.to_dict())
-        else:
-            # Fallback for weird objects, try __dict__ or just str? 
-            # Better to skip or basic str to avoid crash
-            try:
-                serializable_history.append(msg.__dict__)
-            except:
-                serializable_history.append({"role": "error", "parts": [str(msg)]})
 
-    # Prune history
-    clean_history = [prune_empty_fields(msg) for msg in serializable_history]
-    
-    with open(path, "w") as f:
-        json.dump(clean_history, f, indent=2)
 
-def undo_last_message() -> str:
-    """
-    Removes the last (user, assistant) interaction from history.
-    """
-    history = load_chat_snapshot()
-    if not history:
-        return "History is empty."
-        
-    # Remove the last message (expected to be AI)
-    last = history.pop()
-    removed_text = ""
-    if "parts" in last and last["parts"]:
-        removed_text = str(last["parts"][0])[:50] + "..."
+from dnd.rules_engine import search_rules
 
-    # If the message before it was from the 'user', remove that too
-    if history and history[-1].get("role") == "user":
-        history.pop()
-        
-    save_chat_snapshot(history)
-    return removed_text
 
-def roll_dice(expression: str) -> dict:
-    """
-    Parses a dice expression (e.g., '1d20+5') and returns the detailed result.
-    Supported formats: NdM, NdM+X, NdM-X
-    """
-    expression = expression.lower().replace(" ", "")
-    match = re.match(r"(\d+)d(\d+)([\+\-]\d+)?", expression)
-    
-    if not match:
-        return {"error": f"Invalid dice expression: {expression}"}
-    
-    num_dice = int(match.group(1))
-    die_type = int(match.group(2))
-    modifier_str = match.group(3)
-    
-    modifier = 0
-    if modifier_str:
-        modifier = int(modifier_str)
-        
-    rolls = [random.randint(1, die_type) for _ in range(num_dice)]
-    total = sum(rolls) + modifier
-    
-    return {
-        "expression": expression,
-        "rolls": rolls,
-        "modifier": modifier,
-        "total": total,
-        "timestamp": datetime.datetime.now().isoformat()
-    }
-
-def log_to_file(file_path: str, content: str):
-    """
-    Appends content to a file with a timestamp.
-    """
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    entry = f"\n[{timestamp}] {content}\n"
-    
-    # Ensure directory exists
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    
-    with open(file_path, "a") as f:
-        f.write(entry)
-
-def search_rules(query: str, rules_file_path: str) -> str:
-    """
-    Simple keyword search in the rules file.
-    Returns paragraphs containing the query.
-    """
-    if not os.path.exists(rules_file_path):
-        return "Rules file not found."
-        
-    query = query.lower()
-    results = []
-    
-    with open(rules_file_path, "r") as f:
-        content = f.read()
-        
-    # Split by paragraphs (approximate with double newline)
-    paragraphs = content.split("\n\n")
-    
-    for p in paragraphs:
-        if query in p.lower():
-            results.append(p)
-            
-    if not results:
-        return f"No rules found regarding '{query}'."
-        
-    return "\n---\n".join(results[:3]) # Return top 3 matches
-
-# --- Campaign & Session Management ---
-# 1. Resolve Campaigns Directory
-CAMPAIGNS_DIR = os.environ.get("DM_CAMPAIGNS_DIR", os.path.join(os.getcwd(), "campaigns"))
-# 2. Resolve Default/Active Campaign Name
-ACTIVE_CAMPAIGN = os.environ.get("DM_ACTIVE_CAMPAIGN", "default")
-
-def get_campaign_root():
-    """Dynamically resolves the root directory for the active campaign."""
-    # Priority 1: Managed Context (Thread/Task Local)
-    ctx_name = active_campaign_ctx.get()
-    if ctx_name:
-        root = os.path.join(CAMPAIGNS_DIR, ctx_name)
-        if not os.path.exists(root):
-             os.makedirs(root, exist_ok=True)
-        return root
-        
-    # Priority 2: System-level Override (DM_CAMPAIGN_ROOT)
-    env_root = os.environ.get("DM_CAMPAIGN_ROOT")
-    if env_root:
-        return env_root
-        
-    root = os.path.join(CAMPAIGNS_DIR, ACTIVE_CAMPAIGN)
-    if not os.path.exists(root):
-         os.makedirs(root, exist_ok=True)
-    return root
-
-def get_campaign_config(campaign_name: str = None) -> dict:
-    """Loads the campaign-specific config.json."""
-    if not campaign_name:
-        root = get_campaign_root()
-    else:
-        root = os.path.join(CAMPAIGNS_DIR, campaign_name)
-        
-    config_path = os.path.join(root, "config.json")
-    if os.path.exists(config_path):
-        try:
-            with open(config_path, "r") as f:
-                return json.load(f)
-        except:
-            return {}
-    return {}
-
-def get_current_session_dir():
-    root = get_campaign_root()
-    current_session_file = os.path.join(root, "current_session.txt")
-    if os.path.exists(current_session_file):
-        with open(current_session_file, "r") as f:
-            session_name = f.read().strip()
-        return os.path.join(root, session_name)
-    else:
-        return root
 
 def get_log_paths():
     session_dir = get_current_session_dir()
@@ -396,130 +141,16 @@ def request_player_roll_logic(check_type: str, dc: int, consequence: str) -> str
     log_to_file(secrets_log, log_message)
     return "Logged DC and Consequence. You may now ask the player to roll."
 
-# --- Player & Attendance Logic ---
+from core.players import (
+    get_player_mapping_path,
+    load_player_mapping,
+    save_player_mapping,
+    register_player,
+    get_character_name,
+    get_user_id_by_character_name
+)
 
-def get_player_mapping_path():
-    return os.path.join(get_campaign_root(), "player_mapping.json")
 
-def load_player_mapping() -> dict:
-    path = get_player_mapping_path()
-    if os.path.exists(path):
-        try:
-            with open(path, "r") as f:
-                return json.load(f)
-        except:
-            return {}
-    return {}
-
-def save_player_mapping(mapping: dict):
-    path = get_player_mapping_path()
-    with open(path, "w") as f:
-        json.dump(mapping, f, indent=2)
-
-def register_player(user_id: str, char_name: str) -> str:
-    mapping = load_player_mapping()
-    mapping[user_id] = char_name
-    save_player_mapping(mapping)
-    return f"Registered <@{user_id}> as **{char_name}**."
-
-def get_character_name(user_id: str) -> str:
-    mapping = load_player_mapping()
-    return mapping.get(user_id, "Unknown Hero")
-
-def get_user_id_by_character_name(char_name: str) -> str:
-    """
-    Reverse lookup: Find Slack User ID from Character Name.
-    Case-insensitive partial match.
-    """
-    mapping = load_player_mapping()
-    char_name_lower = char_name.lower().strip()
-    
-    for uid, name in mapping.items():
-        if name.lower().strip() == char_name_lower:
-            return uid
-            
-    # If no exact match, try partial
-    for uid, name in mapping.items():
-        if char_name_lower in name.lower():
-            return uid
-            
-    return None
-
-def get_hours_since_last_message() -> float:
-    """
-    Returns hours since the last logged message in chat_history.json.
-    Returns 999.0 if no history exists.
-    """
-    history = load_chat_snapshot()
-    if not history:
-        return 999.0
-        
-    # Try to find the last valid timestamp. 
-    # Our simple history dump might not have timestamps unless we add them, 
-    # OR we rely on file modification time of chat_history.json?
-    # File mod time is safer/easier if we save on every turn.
-    
-    path = get_chat_history_path()
-    if not os.path.exists(path):
-        return 999.0
-        
-    mod_time = os.path.getmtime(path)
-    current_time = datetime.datetime.now().timestamp()
-    
-    delta_seconds = current_time - mod_time
-    return delta_seconds / 3600.0
-
-def get_context_buffer_path():
-    session_dir = get_current_session_dir()
-    return os.path.join(session_dir, "context_buffer.json")
-
-def append_to_context_buffer(author: str, text: str):
-    """
-    Appends a message to the context buffer.
-    """
-    path = get_context_buffer_path()
-    buffer = []
-    
-    if os.path.exists(path):
-        try:
-            with open(path, "r") as f:
-                buffer = json.load(f)
-        except:
-            buffer = []
-            
-    # Add new message
-    timestamp = datetime.datetime.now().strftime("%H:%M")
-    buffer.append(f"[{timestamp}] {author}: {text}")
-    
-    # Ensure directory exists
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    
-    # Save
-    with open(path, "w") as f:
-        json.dump(buffer, f, indent=2)
-
-def get_and_clear_context_buffer() -> str:
-    """
-    Returns the accumulated context as a single string and clears the file.
-    """
-    path = get_context_buffer_path()
-    if not os.path.exists(path):
-        return ""
-        
-    try:
-        with open(path, "r") as f:
-            buffer = json.load(f)
-    except:
-        return ""
-        
-    if not buffer:
-        return ""
-        
-    # Clear file
-    os.remove(path)
-    
-    
-    return "\n".join(buffer)
 
 def read_campaign_log(log_type: str) -> str:
     """
@@ -1236,114 +867,122 @@ def get_combat_state() -> str:
         
     return "Failed to parse combat state."
 
+from core.database import get_db_connection
+
 def manage_inventory(action: str, item_name: str, quantity: int = 1, weight: float = 0.0, character_name: str = None) -> str:
     """
-    Manages character inventory.
+    Manages character inventory using SQLite.
     Args:
-        action: "add", "remove", "check", or "list".
+        action: "add", "remove", "check", "list", "search".
         item_name: Name of the item.
         quantity: Amount to add/remove.
         weight: Weight per unit (optional).
         character_name: Who owns the item.
     """
-    root = get_campaign_root()
-    
-    # --- Global Actions (No Character Required) ---
+    # --- Global Search Actions (No Character Required) ---
     if action == "search":
-        found = []
-        item_key = item_name.strip().lower()
+        item_key = item_name.strip()
         if not item_key:
             return "Error: item_name required for search."
             
-        for filename in os.listdir(root):
-            if filename.startswith("inventory_") and filename.endswith(".json"):
-                c_name = filename[10:-5].replace("_", " ").title() # rough reconstruction
-                try:
-                    with open(os.path.join(root, filename), "r") as f:
-                        data = json.load(f)
-                    # Search keys (case insensitive)
-                    for k, v in data.items():
-                        if item_key in k.lower():
-                            found.append(f"- **{c_name}**: {v['quantity']}x {k}")
-                except:
-                    continue
-        
-        if not found:
-            return f"No items found matching '{item_name}' in any inventory."
-        return "\n".join(["### 🔍 Item Search Results"] + found)
+        with get_db_connection() as conn:
+            query = f"%{item_key}%"
+            cursor = conn.execute('''
+                SELECT p.character_name, i.item_name, i.quantity 
+                FROM inventory i
+                JOIN players p ON i.character_id = p.slack_id
+                WHERE i.item_name LIKE ?
+            ''', (query,))
+            rows = cursor.fetchall()
+            
+            if not rows:
+                return f"No items found matching '{item_name}' in any inventory."
+                
+            found = [f"- **{row['character_name']}**: {row['quantity']}x {row['item_name']}" for row in rows]
+            return "\n".join(["### 🔍 Item Search Results"] + found)
 
     # --- Character Specific Actions ---
     if not character_name:
         return "Error: Character name required."
     
-    safe_name = re.sub(r'[^a-zA-Z0-9]', '_', character_name.lower())
-    inv_file = os.path.join(root, f"inventory_{safe_name}.json")
+    # Resolve character to slack_id
+    from core.players import get_user_id_by_character_name
+    slack_id = get_user_id_by_character_name(character_name)
     
-    inventory = {}
-    if os.path.exists(inv_file):
-        try:
-            with open(inv_file, "r") as f:
-                inventory = json.load(f)
-        except Exception as e:
-            return f"Error loading inventory: {e}"
-            
-    # Normalize Item Name
+    if not slack_id:
+         # Auto-register if missing (graceful fallback)
+         from core.players import register_player
+         # Create a fake temporary ID for them since they don't have a slack account attached yet
+         import uuid
+         slack_id = f"npc_{str(uuid.uuid4())[:8]}"
+         register_player(slack_id, character_name)
+    
     item_key = item_name.strip()
     
-    if action == "add":
-        if item_key in inventory:
-            inventory[item_key]["quantity"] += quantity
-            # Update weight if provided (otherwise keep existing)
-            if weight > 0:
-                inventory[item_key]["weight"] = weight
+    with get_db_connection() as conn:
+        if action == "add":
+            cursor = conn.execute("SELECT quantity FROM inventory WHERE character_id = ? AND item_name = ?", (slack_id, item_key))
+            row = cursor.fetchone()
+            
+            if row:
+                new_qty = row['quantity'] + quantity
+                conn.execute(
+                    "UPDATE inventory SET quantity = ?, weight = ? WHERE character_id = ? AND item_name = ?",
+                    (new_qty, weight, slack_id, item_key)
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO inventory (character_id, item_name, quantity, weight) VALUES (?, ?, ?, ?)",
+                    (slack_id, item_key, quantity, weight)
+                )
+            return f"Added {quantity}x {item_name} to {character_name}'s inventory."
+            
+        elif action == "remove":
+            cursor = conn.execute("SELECT quantity FROM inventory WHERE character_id = ? AND item_name = ?", (slack_id, item_key))
+            row = cursor.fetchone()
+            
+            if not row:
+                return f"{character_name} does not have {item_name}."
+                
+            current_qty = row['quantity']
+            if quantity >= current_qty:
+                conn.execute("DELETE FROM inventory WHERE character_id = ? AND item_name = ?", (slack_id, item_key))
+                return f"Removed all {item_name} from {character_name}."
+            else:
+                new_qty = current_qty - quantity
+                conn.execute("UPDATE inventory SET quantity = ? WHERE character_id = ? AND item_name = ?", (new_qty, slack_id, item_key))
+                return f"Removed {quantity}x {item_name} from {character_name}. Remaining: {new_qty}."
+                
+        elif action == "check":
+            cursor = conn.execute("SELECT quantity, weight FROM inventory WHERE character_id = ? AND item_name = ?", (slack_id, item_key))
+            row = cursor.fetchone()
+            if row:
+                total_w = row['weight'] * row['quantity']
+                return f"{character_name} has {row['quantity']}x {item_name} (Weight: {total_w:.1f})."
+            else:
+                return f"{character_name} does not have {item_name}."
+                
+        elif action == "list":
+            cursor = conn.execute("SELECT item_name, quantity, weight FROM inventory WHERE character_id = ?", (slack_id,))
+            rows = cursor.fetchall()
+            
+            if not rows:
+                return f"{character_name}'s inventory is empty."
+                
+            lines = [f"**{character_name}'s Inventory:**"]
+            total_weight = 0.0
+            
+            for row in rows:
+                qty = row["quantity"]
+                wt = row["weight"] * qty
+                total_weight += wt
+                lines.append(f"- {qty}x {row['item_name']} ({wt:.1f} lbs)")
+                
+            lines.append(f"**Total Weight:** {total_weight:.1f} lbs")
+            return "\n".join(lines)
+            
         else:
-            inventory[item_key] = {"quantity": quantity, "weight": weight}
-            
-        msg = f"Added {quantity}x {item_name} to {character_name}'s inventory."
-        
-    elif action == "remove":
-        if item_key not in inventory:
-            return f"{character_name} does not have {item_name}."
-            
-        current_qty = inventory[item_key]["quantity"]
-        if quantity >= current_qty:
-            del inventory[item_key]
-            msg = f"Removed all {item_name} from {character_name}."
-        else:
-            inventory[item_key]["quantity"] -= quantity
-            msg = f"Removed {quantity}x {item_name} from {character_name}. Remaining: {inventory[item_key]['quantity']}."
-            
-    elif action == "check":
-        if item_key in inventory:
-            data = inventory[item_key]
-            return f"{character_name} has {data['quantity']}x {item_name} (Weight: {data['weight']*data['quantity']:.1f})."
-        else:
-            return f"{character_name} does not have {item_name}."
-            
-    elif action == "list":
-        if not inventory:
-            return f"{character_name}'s inventory is empty."
-            
-        lines = [f"**{character_name}'s Inventory:**"]
-        total_weight = 0.0
-        for name, data in inventory.items():
-            qty = data["quantity"]
-            wt = data.get("weight", 0) * qty
-            total_weight += wt
-            lines.append(f"- {qty}x {name} ({wt:.1f} lbs)")
-            
-        lines.append(f"**Total Weight:** {total_weight:.1f} lbs")
-        return "\n".join(lines)
-    else:
-        return f"Unknown action: {action}"
-        
-    # Save Logic (for add/remove)
-    try:
-        with open(inv_file, "w") as f:
-            json.dump(inventory, f, indent=2)
-        return msg
-    except Exception as e:
-        return f"Error saving inventory: {e}"
+            return f"Unknown action: {action}"
 
 def lookup_item_details(item_name: str) -> str:
     """

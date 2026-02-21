@@ -23,8 +23,15 @@ play:
 		docker compose run --rm -it app python src/play.py; \
 	fi
 
+# List of commands that accept arguments
+SUPPORTED_COMMANDS := up play
+SUPPORTS_ARGS := $(filter $(firstword $(MAKECMDGOALS)), $(SUPPORTED_COMMANDS))
+
 %:
-	@:
+	@if [ -z "$(SUPPORTS_ARGS)" ]; then \
+		echo "make: *** No rule to make target '$@'. Available commands: up, down, play, logs, shell, new, clean"; \
+		exit 1; \
+	fi
 
 # Stop the application
 down:

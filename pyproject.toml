@@ -12,6 +12,7 @@ dependencies = [
     "anthropic>=0.39.0",
     "python-dotenv>=1.0.0",
     "prompt_toolkit>=3.0.0",
+    "chromadb>=1.5.1",
 ]
 
 [project.optional-dependencies]
@@ -23,4 +24,6 @@ discord = [
 ]
 
 [tool.uv]
-dev-dependencies = []
+dev-dependencies = [
+    "pytest>=9.0.2",
+]

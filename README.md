@@ -27,7 +27,28 @@ An AI-powered Dungeon Master that runs locally on your machine, connects to **Di
 
 ## Quick Start
 
-### Path A: Local / MCP (Offline-Capable)
+### Path A: Docker (Recommended)
+*Fastest way to get started with a consistent environment.*
+
+1.  **Configure Secrets**:
+    ```bash
+    cp .env.example .env
+    # Edit .env with your API keys
+    ```
+2.  **Start the App**:
+    ```bash
+    make up
+    ```
+3.  **Create a Campaign**:
+    ```bash
+    make new
+    ```
+4.  **View Logs**:
+    ```bash
+    make logs
+    ```
+
+### Path B: Local / MCP (Offline-Capable)
 *Best for solo testing or using with a local AI client (Claude Desktop, Gemini, etc).*
 
 0.  **Install Local Brain (Ollama)**:
@@ -55,11 +76,11 @@ An AI-powered Dungeon Master that runs locally on your machine, connects to **Di
     ```
     *Or use the generated config to connect it to Claude Desktop.*
 
-### Path B: Slackbot (Online)
+### Path C: Slackbot (Online)
 *Best for playing with friends in a Slack channel.*
 
 1.  **Install & Configure**:
-    Follow steps in Path A, then copy the secrets template:
+    Follow steps in Path B, then copy the secrets template:
     ```bash
     cp .env.example .env
     ```
@@ -72,11 +93,11 @@ An AI-powered Dungeon Master that runs locally on your machine, connects to **Di
     ./play.sh -platform=slack
     ```
 
-### Path C: Discord Bot (Online)
+### Path D: Discord Bot (Online)
 *Best for playing with friends in a Discord server.*
 
 1.  **Install & Configure**:
-    Follow steps in Path A, then copy the secrets template:
+    Follow steps in Path B, then copy the secrets template:
     ```bash
     cp .env.example .env
     ```

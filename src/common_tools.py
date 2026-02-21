@@ -1,9 +1,13 @@
 import dm_utils
 import dnd_bridge
 import os
+from typing import List, Dict, Any, Optional
 
 # Shared State
 DEBUG_MODE = False
+
+# ...
+
 
 def set_debug_mode(debug: bool) -> str:
     """
@@ -192,7 +196,7 @@ def lookup_rule(query: str) -> str:
     rules_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "initial_rules.txt")
     return dm_utils.search_rules(query, rules_path)
 
-def initialize_combat(entities: list) -> str:
+def initialize_combat(entities: List[Dict[str, Any]]) -> str:
     """
     Sets up the initial state for a combat encounter.
     entities: List of dicts, e.g. [{"name": "Goblin 1", "hp": 7, "max_hp": 7, "ac": 15, "notes": "Scimitar"}]

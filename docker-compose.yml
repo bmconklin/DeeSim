@@ -1,0 +1,14 @@
+services:
+  app:
+    build: .
+    container_name: deesim
+    env_file:
+      - .env
+    environment:
+      - DM_ACTIVE_CAMPAIGN=${DM_ACTIVE_CAMPAIGN}
+    volumes:
+      - ./campaigns:/app/campaigns
+      - ./src:/app/src
+      - ./launcher.py:/app/launcher.py
+      - ./run.sh:/app/run.sh
+    restart: unless-stopped

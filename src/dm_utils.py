@@ -321,11 +321,26 @@ def get_campaign_root():
     if env_root:
         return env_root
         
-    # Priority 3: Default Campaign
     root = os.path.join(CAMPAIGNS_DIR, ACTIVE_CAMPAIGN)
     if not os.path.exists(root):
          os.makedirs(root, exist_ok=True)
     return root
+
+def get_campaign_config(campaign_name: str = None) -> dict:
+    """Loads the campaign-specific config.json."""
+    if not campaign_name:
+        root = get_campaign_root()
+    else:
+        root = os.path.join(CAMPAIGNS_DIR, campaign_name)
+        
+    config_path = os.path.join(root, "config.json")
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r") as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
 
 def get_current_session_dir():
     root = get_campaign_root()

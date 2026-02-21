@@ -98,7 +98,9 @@ def main():
         print(f"✨ Resumed session ({len(history)} messages).")
         
     # 4. Initialize Session
-    provider, model_name = resolve_model_config()
+    # Try to determine if Google is active so we can warn about images
+    model_name = resolve_model_config()
+    provider = "google" if "gemini" in model_name else "local"
     print(f"🚀 Starting session with {provider} model: {model_name}")
     
     try:

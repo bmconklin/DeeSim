@@ -11,9 +11,9 @@ class GameEngine:
     def __init__(self, tools_list: list):
         self.tools_list = tools_list
         # self.sessions was removed to enforce statelessness
-        provider, resolved_name = llm_bridge.resolve_model_config()
+        resolved_name = llm_bridge.resolve_model_config()
         self.model_name = resolved_name
-        print(f"✨ [Engine] Multitenant Initialized with {provider} model: {self.model_name}")
+        print(f"✨ [Engine] Multitenant Initialized with model: {self.model_name}")
 
     def get_campaign_session(self, campaign_name: str):
         """Retrieves or initializes a chat session for a specific campaign."""

@@ -2,6 +2,7 @@ import os
 import json
 import shutil
 import sys
+from dotenv import load_dotenv
 
 def clear_screen():
     os.system('cls' if os.name == 'nt' else 'clear')
@@ -35,6 +36,32 @@ def create_campaign():
     
     os.makedirs(campaign_dir, exist_ok=True)
     
+    # --- Platform Configuration ---
+    print("\n--- Platform Details ---")
+    platform = get_input("Platform (slack/discord/terminal)", "terminal").lower()
+    
+    config = {
+        "platform": platform,
+        "admin_user_id": None,
+        "allowed_channel_ids": []
+    }
+    
+    if platform in ["slack", "discord"]:
+        # Load env vars for defaults
+        load_dotenv()
+        default_admin = os.environ.get("ADMIN_USER_ID") if platform == "slack" else os.environ.get("ADMIN_DISCORD_ID")
+        config["admin_user_id"] = get_input(f"{platform.capitalize()} Admin User ID (Optional)", default_admin)
+        
+        default_channels = os.environ.get("ALLOWED_CHANNEL_IDS") if platform == "slack" else os.environ.get("DISCORD_ALLOWED_CHANNEL_ID")
+        channels_input = get_input(f"Allowed Channel IDs (comma separated, Optional)", default_channels)
+        if channels_input:
+            config["allowed_channel_ids"] = [c.strip() for c in channels_input.split(",")]
+            
+    # Save Campaign Config
+    with open(os.path.join(campaign_dir, "config.json"), "w") as f:
+        json.dump(config, f, indent=2)
+    print(f"Saved campaign config to {os.path.join(campaign_dir, 'config.json')}")
+
     # Create World Info file (Persistent Context)
     with open(os.path.join(campaign_dir, "world_info.md"), "w") as f:
         f.write(f"# World Info: {campaign_name}\n\n## Important Locations\n\n## Important NPCs\n")

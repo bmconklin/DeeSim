@@ -344,7 +344,10 @@ def handle_admin_commands(message, say):
         token = dm_utils.set_active_campaign(campaign_name)
     
     try:
-        admin_id = os.environ.get("ADMIN_USER_ID")
+        # Check Campaign Config First
+        config = dm_utils.get_campaign_config(campaign_name)
+        admin_id = config.get("admin_user_id") or os.environ.get("ADMIN_USER_ID")
+        
         if not admin_id or user_id != admin_id:
             say(f"⛔ You are not the Dungeon Master (Admin ID: {admin_id}).")
             return
@@ -667,6 +670,18 @@ def handle_message_events(message, say, logger):
     channel_id = message.get("channel")
     server_id = message.get("team") # Slack Team ID
     text = message.get("text")
+    
+    # --- CAMPAIGN PERMISSION CHECK ---
+    # If channel is bound to a campaign, check if channel is allowed in config
+    campaign_name = dm_utils.get_campaign_for_channel("slack", channel_id)
+    if campaign_name:
+        config = dm_utils.get_campaign_config(campaign_name)
+        allowed_channels = config.get("allowed_channel_ids", [])
+        if allowed_channels and channel_id not in allowed_channels:
+             # Silent ignore or log? Silent to avoid spam.
+             # Except if it's a DM, which handles itself.
+             if channel_type != "im":
+                 return
     
     # --- DM LOGIC (Active) ---
     if channel_type == "im":

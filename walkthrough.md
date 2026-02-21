@@ -7,7 +7,14 @@
 
 ## Setup Guide
 
-### 1. Run the Installer
+### 1. Docker Setup (Fastest)
+Run the application in a container:
+```bash
+make up
+make new  # To create a campaign
+```
+
+### 2. Manual Installer (Local)
 Open your terminal in this directory and run:
 
 ```bash

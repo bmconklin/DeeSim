@@ -143,6 +143,14 @@ As the Admin, you can manage who joins the game dynamically:
 - `!admin list`: Shows current allowed users.
 - `!admin bind <campaign_name>`: 🎲 **Binds current channel to a specific campaign folder.**
 
+## Migrating from v1 (JSON/Text Files) to v2 (Database)
+If you have an existing campaign from older versions of the bot, your player data, inventory, and quests are likely stored in flat files (like `player_mapping.json` or `inventory_hero.json`). To upgrade these to the new SQLite architecture:
+
+```bash
+uv run python scripts/migrate_to_sqlite.py <campaign_name>
+```
+*Note: This will safely read your old JSON files, inject them into the `campaign.db` file, and append `.bak` to the end of the old files so they aren't accidentally read again.*
+
 ## Documentation
 - [Slack Setup Guide](slack_walkthrough.md): How to get the tokens.
 - [Discord Setup Guide](discord_walkthrough.md): How to get the tokens.
@@ -163,10 +171,10 @@ The agent automatically reads procedures from the `skills/` directory:
 -   **Social Encounter** (`skills/social_conflict`): Dice-based rules for high-stakes NPC interactions.
 
 ### Inventory System
-The agent can now track player equipment, gold, and weight:
+The agent can track player equipment, gold, and weight persistently using the database:
 -   **Add Item**: `manage_inventory("add", "Sword", "Grognak", weight=3.0)`
 -   **Check Gear**: `manage_inventory("list", ..., "Grognak")`
--   **Persistance**: Inventory is saved to `campaigns/<campaign>/inventory_<name>.json`.
+-   **Persistance**: Inventory, player stats, and quests are safely recorded in `campaigns/<campaign>/campaign.db` (SQLite).
 
 ## Feature Capabilities
 The bot is designed to be **Offline First**, with optional Cloud enhancements.

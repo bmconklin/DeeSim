@@ -18,3 +18,12 @@ campaigns/
 
 # OS
 .DS_Store
+
+# Databases
+*.db
+*.sqlite
+chroma_db/
+
+# Testing/Linting
+.pytest_cache/
+.ruff_cache/

@@ -1,26 +1,14 @@
 #!/usr/bin/env python3
 import sys
-import json
-import traceback
-import urllib.request
-import urllib.error
-import urllib.parse
-import mcp.types as types
-from src.dnd.core.api_helpers import API_BASE_URL
-from src.dnd.core.formatters import format_monster_data, format_spell_data, format_class_data
 import requests
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from src.dnd.core.cache import APICache
-import src.dnd.core.formatters as formatters
-import src.dnd.core.resources as resources
 import time
 # Import our new source attribution system
 from src.dnd.attribution import (
     SourceAttribution,
     ConfidenceLevel,
-    ConfidenceFactors,
-    ConfidenceScorer,
     ToolCategory,
     track_tool_usage,
     source_tracker,
@@ -35,10 +23,6 @@ from src.dnd.templates import (
 # Import our query enhancement module
 from src.dnd.query_enhancement import (
     enhance_query,
-    expand_query_with_synonyms,
-    tokenize_dnd_query,
-    fuzzy_match,
-    prioritize_categories,
     get_top_categories
 )
 
@@ -880,7 +864,7 @@ def register_tools(app, cache: APICache):
 
         # Format the response using our template system if enabled
         if TEMPLATES_ENABLED:
-            formatted_content = f"# Verification of D&D Statement\n\n"
+            formatted_content = "# Verification of D&D Statement\n\n"
             formatted_content += f"**Statement:** {statement}\n\n"
 
             if found_matches:
@@ -1078,7 +1062,7 @@ def register_tools(app, cache: APICache):
 
         # Format the health check result using our template system if enabled
         if TEMPLATES_ENABLED:
-            formatted_content = f"# D&D 5e API Health Check\n\n"
+            formatted_content = "# D&D 5e API Health Check\n\n"
             formatted_content += f"**Status:** {health_check['status'].upper()}\n"
             formatted_content += f"**Timestamp:** {health_check['timestamp']}\n\n"
 

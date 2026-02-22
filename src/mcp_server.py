@@ -1,13 +1,11 @@
 from mcp.server.fastmcp import FastMCP
 import dm_utils
+from dm_utils import get_campaign_root, get_log_paths
 import dnd_bridge
 import os
 
 # Initialize FastMCP Server
 mcp = FastMCP("DungeonMasterTools")
-
-# campaigning paths are handled by dm_utils
-from dm_utils import get_campaign_root, get_current_session_dir, get_log_paths
 
 # Note: dm_utils tools now handle missing API keys gracefully.
 # No extra logic needed here as we delegate to them.
@@ -32,7 +30,7 @@ def start_new_session(summary_of_previous: str) -> str:
     # Assume format "session_N"
     try:
         current_num = int(current_name.split("_")[1])
-    except:
+    except Exception:
         current_num = 0
         
     next_num = current_num + 1

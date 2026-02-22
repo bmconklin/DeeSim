@@ -2,9 +2,8 @@
 import sys
 from mcp.types import PromptMessage as UserMessage, PromptMessage as AssistantMessage
 from mcp.types import TextContent
-from src.dnd.core.api_helpers import validate_dnd_entity, fetch_dnd_entity, API_BASE_URL
+from src.dnd.core.api_helpers import validate_dnd_entity, fetch_dnd_entity
 import logging
-import re
 
 logger = logging.getLogger(__name__)
 
@@ -190,8 +189,8 @@ All responses about D&D content must include a reference to the D&D 5e API as th
         class_spells = []
         if class_valid:
             try:
-                # Fetch spells for this class
-                class_data = fetch_dnd_entity("classes", class_name.lower())
+                # Fetch spells for this class, but variable not actively used below
+                fetch_dnd_entity("classes", class_name.lower())
 
                 # Try to get spells from the API
                 from .resources import get_items
@@ -260,9 +259,8 @@ All responses about D&D content must include a reference to the D&D 5e API as th
                 f"Could not parse party level: {party_level}, using default level 1")
 
         try:
-            size = int(party_size.strip())
+            int(party_size.strip())
         except (ValueError, AttributeError):
-            size = 4
             logger.warning(
                 f"Could not parse party size: {party_size}, using default size 4")
 

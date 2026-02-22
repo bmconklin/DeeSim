@@ -1,6 +1,5 @@
 import os
 import json
-import shutil
 import sys
 from dotenv import load_dotenv
 
@@ -53,7 +52,7 @@ def create_campaign():
         config["admin_user_id"] = get_input(f"{platform.capitalize()} Admin User ID (Optional)", default_admin)
         
         default_channels = os.environ.get("ALLOWED_CHANNEL_IDS") if platform == "slack" else os.environ.get("DISCORD_ALLOWED_CHANNEL_ID")
-        channels_input = get_input(f"Allowed Channel IDs (comma separated, Optional)", default_channels)
+        channels_input = get_input("Allowed Channel IDs (comma separated, Optional)", default_channels)
         if channels_input:
             config["allowed_channel_ids"] = [c.strip() for c in channels_input.split(",")]
             
@@ -111,8 +110,8 @@ def generate_client_config(server_script_path):
         with open(filename, "w") as f:
             f.write(config_json)
             
-        print(f"\n[ACTION REQUIRED] To enable the DM tools in Claude Desktop:")
-        print(f"Run this command to copy the config (MacOS/Linux):")
+        print("\n[ACTION REQUIRED] To enable the DM tools in Claude Desktop:")
+        print("Run this command to copy the config (MacOS/Linux):")
         print(f"cp {filename} ~/Library/Application\\ Support/Claude/claude_desktop_config.json")
         print("(Note: If you already have a config there, you should manually merge the contents.)")
         

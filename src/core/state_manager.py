@@ -1,6 +1,5 @@
 import os
 import json
-import glob
 import datetime
 from core.campaign import get_campaign_root, get_current_session_dir
 
@@ -11,7 +10,6 @@ os.environ["ONNXRUNTIME_LOG_LEVEL"] = "3"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 import chromadb
-from chromadb.config import Settings
 
 # --- Vector & State Logic ---
 
@@ -128,7 +126,7 @@ def save_chat_snapshot(history_data: list):
         else:
             try:
                 serializable_history.append(msg.__dict__)
-            except:
+            except Exception:
                 serializable_history.append({"role": "error", "parts": [str(msg)]})
 
     clean_history = [prune_empty_fields(msg) for msg in serializable_history]

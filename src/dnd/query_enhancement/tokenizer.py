@@ -5,7 +5,7 @@ This module provides functions to tokenize D&D queries and handle special terms.
 """
 
 import re
-from typing import List, Tuple, Set
+from typing import List, Tuple
 
 # Special D&D terms that should be preserved as single tokens
 SPECIAL_DND_TERMS = {
@@ -54,11 +54,6 @@ SPECIAL_DND_TERMS = {
     "AOE": "area of effect",
     "DOT": "damage over time",
     "CC": "crowd control",
-
-    # Combat
-    "OA": "opportunity attack",
-    "AoO": "attack of opportunity",
-    "DPR": "damage per round",
 
     # Character creation
     "PC": "player character",

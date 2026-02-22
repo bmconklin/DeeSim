@@ -14,7 +14,7 @@ def get_campaign_for_channel(platform_id: str, channel_id: str) -> str | None:
         with open(REGISTRY_PATH, "r") as f:
             registry = json.load(f)
         return registry.get(f"{platform_id}:{channel_id}")
-    except:
+    except Exception:
         return None
 
 def bind_channel_to_campaign(platform_id: str, channel_id: str, campaign_name: str):
@@ -24,7 +24,8 @@ def bind_channel_to_campaign(platform_id: str, channel_id: str, campaign_name: s
         try:
             with open(REGISTRY_PATH, "r") as f:
                 registry = json.load(f)
-        except: pass
+        except Exception:
+            pass
     registry[f"{platform_id}:{channel_id}"] = campaign_name
     with open(REGISTRY_PATH, "w") as f:
         json.dump(registry, f, indent=2)
@@ -69,7 +70,7 @@ def get_campaign_config(campaign_name: str | None = None) -> dict:
         try:
             with open(config_path, "r") as f:
                 return json.load(f)
-        except:
+        except Exception:
             return {}
     return {}
 

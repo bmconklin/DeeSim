@@ -1,10 +1,15 @@
-
 import os
 import sys
 import asyncio
 import discord
 import requests
 from dotenv import load_dotenv
+
+import dm_utils
+from google.genai import types
+
+from core.engine import GameEngine
+from bot import tools_list # Reuse tools from bot.py or move tools to core
 
 # Load env vars
 load_dotenv()
@@ -15,12 +20,7 @@ if not os.environ.get("DISCORD_BOT_TOKEN"):
     print("Please add it to run the Discord bot.")
     sys.exit(1)
 
-import dm_utils
-from google.genai import types
-
 # --- Setup Game Engine ---
-from core.engine import GameEngine
-from bot import tools_list, get_system_instruction # Reuse tools from bot.py or move tools to core
 
 # Initialize Engine
 engine = GameEngine(
@@ -143,12 +143,12 @@ async def on_message(message):
 
             if not topic:
                 # Context-based generation
-                await message.channel.send(f"🎨 Asking DM to visualize the current scene...")
-                prompt_injection = f"(System Command): The user wants a visualization of the CURRENT SCENE based on recent gameplay. 1. Describe the current moment vividly. 2. Call `generate_scene_image` (or write '**Image Prompt:**') to generate it."
+                await message.channel.send("🎨 Asking DM to visualize the current scene...")
+                prompt_injection = "(System Command): The user wants a visualization of the CURRENT SCENE based on recent gameplay. 1. Describe the current moment vividly. 2. Call `generate_scene_image` (or write '**Image Prompt:**') to generate it."
             elif topic.lower() in ["session", "highlight", "recap", "epic"]:
                 # Session-wide recap generation
-                await message.channel.send(f"🎨 Asking DM to find and paint the session's most epic moment...")
-                prompt_injection = f"(System Command): The user wants a visualization of the MOST EPIC MOMENT from this entire session. 1. Review the chat history. 2. Choose the most dramatic, visually striking scene that occurred. 3. Describe it vividly. 4. Call `generate_scene_image` (or write '**Image Prompt:**') to generate it."
+                await message.channel.send("🎨 Asking DM to find and paint the session's most epic moment...")
+                prompt_injection = "(System Command): The user wants a visualization of the MOST EPIC MOMENT from this entire session. 1. Review the chat history. 2. Choose the most dramatic, visually striking scene that occurred. 3. Describe it vividly. 4. Call `generate_scene_image` (or write '**Image Prompt:**') to generate it."
             else:
                 # Specific topic generation
                 await message.channel.send(f"🎨 Asking DM to visualize: *{topic}*...")

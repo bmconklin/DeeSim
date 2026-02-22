@@ -5,8 +5,9 @@ import sys
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(_PROJECT_ROOT)
 
-from src.dnd.core.cache import APICache
-from src.dnd.core import tools as dnd_tools
+from src.dnd.core.cache import APICache  # noqa: E402
+from src.dnd.core import tools as dnd_tools  # noqa: E402
+
 
 # Mock FastMCP App to capture the tools
 class MockApp:

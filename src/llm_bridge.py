@@ -36,7 +36,8 @@ class ChatSession:
         for msg in history:
             role = msg.get("role", "user")
             # Map Gemini 'model' to standard 'assistant'
-            if role == "model": role = "assistant"
+            if role == "model":
+                role = "assistant"
             
             parts = msg.get("parts", [])
             content = ""

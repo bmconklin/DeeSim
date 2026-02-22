@@ -27,6 +27,7 @@ RUN uv venv .venv && \
 
 # Set environment variables
 ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONPATH="/app"
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 

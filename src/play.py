@@ -1,6 +1,8 @@
 import os
 import sys
-import json
+from llm_bridge import get_chat_session, resolve_model_config
+import dm_utils
+import common_tools
 
 # Suppress harmless ONNX C++ and tokenizer warnings for Apple Silicon
 os.environ["ONNXRUNTIME_LOG_LEVEL"] = "3"
@@ -24,9 +26,6 @@ if len(sys.argv) > 1:
         print(f"🎯 CLI Pivot: Campaign name '{arg}'")
 
 # from bot import tools_list, DEBUG_MODE # Removed to avoid Slack dependency
-from llm_bridge import get_chat_session, resolve_model_config
-import dm_utils
-import common_tools
 
 # --- Local Tool Overrides ---
 def send_dm(character_name: str, message: str) -> str:
@@ -144,7 +143,7 @@ def main():
     while True:
         try:
             # Replaces standard input()
-            user_input = prompt_session.prompt(f"You > ", multiline=True)
+            user_input = prompt_session.prompt("You > ", multiline=True)
         except (KeyboardInterrupt, EOFError):
             print("\nExiting...")
             break
@@ -189,7 +188,7 @@ def main():
             
             # --- Auto-Image Generation ---
             # 1. Check for regex-scraped prompt
-            image_found = dm_utils.extract_and_save_prompt_from_text(ai_text)
+            dm_utils.extract_and_save_prompt_from_text(ai_text)
             
             # 2. Trigger generation if prompt exists (either from tool or regex)
             image_path, _ = dm_utils.generate_image_from_pending()

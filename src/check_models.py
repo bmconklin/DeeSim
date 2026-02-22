@@ -19,10 +19,12 @@ try:
         print(f"Model: {m.name}")
         try:
             print(f"  - Display Name: {m.display_name}")
-        except: pass
+        except Exception:
+            pass
         try:
             print(f"  - Supported Methods: {m.supported_generation_methods}")
-        except: pass
+        except Exception:
+            pass
         print("-" * 20)
             
 except Exception as e:

@@ -4,45 +4,24 @@ import requests
 import json
 import datetime
 import re
-import glob
-try:
-    import google.genai as genai
-    from google.genai import types
-except ImportError:
-    genai = None # Handle missing dependency for pure local/offline mode
+from google.genai import types
+from google import genai
 try:
     import fantasynames as fn
 except ImportError:
-    fn = None  # fantasynames requires typed-ast, unavailable on Python 3.13+
-from contextvars import ContextVar
+    fn = None
 
 from core.campaign import (
-    active_campaign_ctx,
-    REGISTRY_PATH,
-    get_campaign_for_channel,
-    bind_channel_to_campaign,
-    set_active_campaign,
-    CAMPAIGNS_DIR,
-    ACTIVE_CAMPAIGN,
     get_campaign_root,
-    get_campaign_config,
     get_current_session_dir
 )
 
 # --- Deep Memory Logic ---
 from core.state_manager import (
-    search_archived_summaries,
-    read_archived_history,
-    get_chat_history_path,
-    load_chat_snapshot,
-    prune_empty_fields,
-    save_chat_snapshot,
-    undo_last_message,
-    log_to_file,
-    get_hours_since_last_message,
-    append_to_context_buffer,
-    get_and_clear_context_buffer
+    log_to_file
 )
+from core.players import get_user_id_by_character_name
+from core.database import get_db_connection
 
 
 
@@ -88,11 +67,9 @@ def download_slack_file(url: str, token: str) -> bytes:
         return None
 
 
-from dnd.dice import roll_dice
 
 
 
-from dnd.rules_engine import search_rules
 
 
 
@@ -113,7 +90,7 @@ def start_new_session_logic(summary_of_previous: str) -> str:
         
     try:
         current_num = int(current_name.split("_")[1])
-    except:
+    except Exception:
         current_num = 0
         
     next_num = current_num + 1
@@ -139,12 +116,6 @@ def request_player_roll_logic(check_type: str, dc: int, consequence: str) -> str
     log_message = f"**WAITING FOR PLAYER** | Type: {check_type} | DC: {dc} | Fail Consequence: {consequence}"
     log_to_file(secrets_log, log_message)
     return "Logged DC and Consequence. You may now ask the player to roll."
-
-from core.players import (
-    register_player,
-    get_character_name,
-    get_user_id_by_character_name
-)
 
 
 
@@ -431,7 +402,6 @@ def extract_and_save_prompt_from_text(text: str) -> bool:
     Fallback: Scrapes an image prompt from the model's text output if it forgot to call the tool.
     Looks for: **Image Prompt:** "..."
     """
-    import re
     # Match "**Image Prompt:**" and capture until "---", double newline, or end of string.
     # We use DOTALL for the capture group to include internal newlines, but stop at major delimiters.
     patterns = [
@@ -462,7 +432,6 @@ def save_image_to_campaign(image_bytes: bytes, prompt: str) -> str:
     os.makedirs(visuals_dir, exist_ok=True)
     
     # Create safe filename
-    import re
     safe_name = re.sub(r"[^a-zA-Z0-9 ]", "", prompt[:30]).strip().replace(" ", "_")
     timestamp = datetime.datetime.now().strftime("%H%M%S")
     filename = f"{timestamp}_{safe_name}.png"
@@ -631,7 +600,7 @@ def get_setup_step() -> int:
         with open(path, "r") as f:
             data = json.load(f)
             return data.get("step", 0)
-    except:
+    except Exception:
         return 0
 
 def advance_setup_step() -> str:
@@ -748,8 +717,7 @@ def read_character_sheet(name: str) -> str:
         
     return f"Character Sheet: {name.strip()}\nLast Updated: {row['updated_at']}\n-------------------------------------------\n{row['details_text']}"
 
-    with open(path, "r") as f:
-        return f.read()
+    # Dead code below - skipping for safety
 
 # --- Name Generation Logic ---
 
@@ -806,7 +774,7 @@ def generate_random_name(race: str = "any", count: int = 1) -> str:
             return names[0]
         return ", ".join(names)
 
-    except Exception as e:
+    except Exception:
         return None
 
 def update_combat_state(entities: list) -> str:
@@ -860,7 +828,6 @@ def get_combat_state() -> str:
     if "## Active Combat" not in content:
         return "No active combat section found."
         
-    import re
     pattern = r"## Active Combat\n.*?(?=\n##|$)"
     match = re.search(pattern, content, flags=re.DOTALL)
     if match:
@@ -868,7 +835,7 @@ def get_combat_state() -> str:
         
     return "Failed to parse combat state."
 
-from core.database import get_db_connection
+    return "Failed to parse combat state."
 
 def manage_inventory(action: str, item_name: str = "", quantity: int = 1, weight: float = 0.0, character_name: str = None) -> str:
     """
@@ -907,7 +874,6 @@ def manage_inventory(action: str, item_name: str = "", quantity: int = 1, weight
         return "Error: Character name required."
     
     # Resolve character to slack_id
-    from core.players import get_user_id_by_character_name
     slack_id = get_user_id_by_character_name(character_name)
     
     if not slack_id:
@@ -1019,10 +985,12 @@ def lookup_item_details(item_name: str) -> str:
                     if i["index"] == target_index:
                         best_item = i
                         best_item["category"] = cat
+                        best_item["category"] = cat
                         break
-            except:
+            except Exception:
                 continue
-        if best_item: break
+        if best_item:
+            break
             
     # Priority 2: If no top result is an item, scan the full results for ANY item
     if not best_item:
@@ -1040,7 +1008,6 @@ def lookup_item_details(item_name: str) -> str:
     # 3. Extract Details
     details = best_item.get("details", {})
     name = best_item.get("name")
-    category = best_item.get("category")
     
     # Rarity
     rarity = "Unknown"
@@ -1183,16 +1150,18 @@ def lookup_monster(monster_name: str) -> str:
                     if i["index"] == target_index:
                         best_match = i
                         break
-            except:
+                        best_match = i
+                        break
+            except Exception:
                 continue
-        if best_match: break
-    
+        if best_match:
+            break
     if not best_match:
-         # Priority 2: Scan full results
-         if "monsters" in results.get("results", {}):
-             items = results["results"]["monsters"].get("items", [])
-             if items:
-                 best_match = items[0]
+        # Priority 2: Scan full results
+        if "monsters" in results.get("results", {}):
+            items = results["results"]["monsters"].get("items", [])
+            if items:
+                best_match = items[0]
                  
     if not best_match:
         return f"No monster stats found for '{monster_name}'."
@@ -1241,7 +1210,6 @@ def load_skills_content() -> str:
     """
     Scans the skills/ directory for SKILL.md files and formats them for the prompt.
     """
-    root = get_campaign_root()
     # Assuming skills/ is at the project root, not campaign root
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     skills_dir = os.path.join(project_root, "skills")

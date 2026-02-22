@@ -7,14 +7,12 @@ to provide comprehensive source tracking for all information.
 
 from typing import Dict, Any, List, Optional, Tuple
 from src.dnd.attribution.core import (
-    SourceAttribution,
-    AttributionManager,
     ConfidenceLevel,
     attribution_manager
 )
-from src.dnd.attribution.citation import Citation, CitationManager, citation_manager
+from src.dnd.attribution.citation import citation_manager
 from src.dnd.attribution.confidence import ConfidenceScorer, ConfidenceFactors
-from src.dnd.attribution.tool_tracking import ToolTracker, ToolCategory, tool_tracker, track_tool_usage
+from src.dnd.attribution.tool_tracking import ToolCategory, tool_tracker, track_tool_usage
 from src.dnd.attribution.formatters import format_all_attribution_for_display
 
 
@@ -97,8 +95,6 @@ class SourceTracker:
 
         avg_confidence = sum(
             confidence_values[attr.confidence] for attr in attributions) / len(attributions)
-        avg_relevance = sum(
-            attr.relevance_score for attr in attributions) / len(attributions) / 100
 
         # Check for multiple or contradictory sources
         sources = set(attr.source for attr in attributions)

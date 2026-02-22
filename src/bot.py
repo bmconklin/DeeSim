@@ -1,5 +1,13 @@
 import os
 import sys
+import re
+import dm_utils
+import dnd_bridge
+import common_tools
+from slack_bolt import App
+from slack_bolt.adapter.socket_mode import SocketModeHandler
+from core.engine import GameEngine
+from core.permissions import permissions
 
 # Suppress harmless ONNX C++ and tokenizer warnings for Apple Silicon
 os.environ["ONNXRUNTIME_LOG_LEVEL"] = "3"
@@ -7,23 +15,15 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 from dotenv import load_dotenv
 
-# Load env vars BEFORE importing dm_utils to ensure CAMPAIGN_ROOT is picked up
+# Load env vars
 load_dotenv()
 
-# Check for required Slack keys (Google Key is optional for Local Mode)
-if not os.environ.get("SLACK_BOT_TOKEN") or not os.environ.get("SLACK_APP_TOKEN"):
-    print("Error: Missing secrets in .env file (SLACK_BOT_TOKEN, SLACK_APP_TOKEN)")
-    print("Please create a .env file with these keys.")
+# Verify token early before starting anything else
+token = os.environ.get("SLACK_BOT_TOKEN")
+if not token:
+    print("SLACK_BOT_TOKEN is missing!")
+    print("Please add it to run the Discord bot.")
     sys.exit(1)
-
-import dm_utils
-import dnd_bridge
-import common_tools
-import re
-from slack_bolt import App
-from slack_bolt.adapter.socket_mode import SocketModeHandler
-import google.genai as genai
-from google.genai import types
 
 # Setup Gemini Client
 # Client init moved to llm_bridge call later
@@ -250,10 +250,6 @@ def get_system_instruction():
 def campaign_dir_from_root(root):
     return root
 
-# --- Setup Game Engine ---
-from core.engine import GameEngine
-from core.permissions import is_allowed, permissions
-
 # Initialize Engine with Tools (Multi-tenant)
 engine = GameEngine(
     tools_list=tools_list
@@ -451,7 +447,8 @@ def handle_wrapup_command(message, say):
     except Exception as e:
         say(f"❌ Wrap-up failed: {e}")
     finally:
-        if token: dm_utils.active_campaign_ctx.reset(token)
+        if token:
+            dm_utils.active_campaign_ctx.reset(token)
 
 @app.message(re.compile("^!startsession"))
 def handle_startsession_command(message, say):
@@ -491,7 +488,8 @@ def handle_startsession_command(message, say):
     except Exception as e:
         say(f"❌ Failed to start new session: {e}")
     finally:
-        if token: dm_utils.active_campaign_ctx.reset(token)
+        if token:
+            dm_utils.active_campaign_ctx.reset(token)
 
 @app.message(re.compile("^!recap"))
 def handle_recap_command(message, say):
@@ -559,7 +557,8 @@ def handle_recap_command(message, say):
     except Exception as e:
         say(f"❌ Recap failed: {e}")
     finally:
-        if token: dm_utils.active_campaign_ctx.reset(token)
+        if token:
+            dm_utils.active_campaign_ctx.reset(token)
 
 
 
@@ -584,7 +583,7 @@ def handle_name_command(message, say):
         try:
             api_key = os.environ.get("GOOGLE_API_KEY")
             if not api_key:
-                say(f"❌ Custom names require GOOGLE_API_KEY. See README.md.")
+                say("❌ Custom names require GOOGLE_API_KEY. See README.md.")
                 return
             
             # The GameEngine will handle LLM calls for name generation if dm_utils doesn't have it.

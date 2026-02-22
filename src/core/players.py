@@ -1,5 +1,3 @@
-import os
-from core.campaign import get_campaign_root
 from core.database import get_db_connection
 
 # --- Player & Attendance Logic ---

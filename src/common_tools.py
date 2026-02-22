@@ -1,7 +1,7 @@
 import dm_utils
 import dnd_bridge
 import os
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
 # Shared State
 DEBUG_MODE = False
@@ -215,7 +215,6 @@ def track_combat_change(character_name: str, hp_change: int = 0, notes_update: s
         return state_text
 
     # Basic parsing of the markdown table
-    import re
     entities = []
     lines = state_text.split("\n")
     for line in lines:
@@ -229,7 +228,7 @@ def track_combat_change(character_name: str, hp_change: int = 0, notes_update: s
                 
                 try:
                     curr_hp, max_hp = map(int, hp_val.split("/"))
-                except:
+                except Exception:
                     curr_hp, max_hp = 0, 0
                 
                 if name.lower() == character_name.lower():

@@ -86,7 +86,11 @@ def main():
         os.makedirs(campaign_root, exist_ok=True)
 
     print(f"{BLUE}Playing Campaign: {os.path.basename(campaign_root)}{NC}")
-    
+
+    # Initialize SQLite database tables for this campaign
+    from core.database import init_db
+    init_db()
+
     # 2. Load System Prompt
     system_instruction = dm_utils.get_system_instruction()
         

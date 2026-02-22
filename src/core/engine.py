@@ -68,7 +68,10 @@ class GameEngine:
         # 2. Set Context for all nested util calls in this thread
         token = dm_utils.set_active_campaign(campaign_name)
         try:
-        
+            # Ensure SQLite tables exist for this campaign
+            from core.database import init_db
+            init_db()
+
             # Permission Check
             if not is_allowed(user_id=user_id, channel_id=channel_id, server_id=server_id, platform_id=platform_id):
                 platform_label = "Slack Workspace" if platform_id == "slack" else "Discord Server"

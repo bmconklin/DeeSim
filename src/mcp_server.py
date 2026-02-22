@@ -9,6 +9,10 @@ mcp = FastMCP("DungeonMasterTools")
 # campaigning paths are handled by dm_utils
 from dm_utils import get_campaign_root, get_current_session_dir, get_log_paths
 
+# Initialize SQLite database tables for the active campaign
+from core.database import init_db
+init_db()
+
 # Note: dm_utils tools now handle missing API keys gracefully.
 # No extra logic needed here as we delegate to them.
 

@@ -2,6 +2,7 @@ import os
 import json
 import glob
 import datetime
+import logging
 from core.campaign import get_campaign_root, get_current_session_dir
 
 from core.database import get_db_connection
@@ -10,51 +11,85 @@ from core.database import get_db_connection
 os.environ["ONNXRUNTIME_LOG_LEVEL"] = "3"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-import chromadb
-from chromadb.config import Settings
+# ChromaDB is optional — pydantic v1 (a transitive dependency) is broken on
+# Python 3.14+, which causes an ImportError / ConfigError on import.
+# See: https://github.com/chroma-core/chroma/issues/6356
+try:
+    import chromadb
+    from chromadb.config import Settings
+    HAS_CHROMADB = True
+except Exception:
+    chromadb = None        # type: ignore[assignment]
+    Settings = None        # type: ignore[assignment,misc]
+    HAS_CHROMADB = False
+
+logger = logging.getLogger(__name__)
+
+if not HAS_CHROMADB:
+    logger.warning(
+        "chromadb is not available (Python 3.14 pydantic v1 compat) — "
+        "vector search / Deep Memory features are disabled. "
+        "See https://github.com/chroma-core/chroma/issues/6356"
+    )
 
 # --- Vector & State Logic ---
 
 def get_chroma_client():
-    """Returns a client for the local ChromaDB associated with this campaign."""
+    """Returns a client for the local ChromaDB associated with this campaign.
+
+    Returns None when chromadb is unavailable so callers can degrade gracefully.
+    """
+    if not HAS_CHROMADB:
+        return None
     root = get_campaign_root()
     db_path = os.path.join(root, "chroma_db")
     return chromadb.PersistentClient(path=db_path)
 
 def get_chat_collection():
-    """Returns the main chat sequence collection."""
+    """Returns the main chat sequence collection, or None when chromadb is unavailable."""
     client = get_chroma_client()
+    if client is None:
+        return None
     # We use a simple generic embedding for local test, or let Chroma use its default all-MiniLM-L6-v2
     return client.get_or_create_collection(name="chat_history")
 
 def get_session_summary_collection():
-    """Returns the collection dedicated to session summaries."""
+    """Returns the collection dedicated to session summaries, or None when chromadb is unavailable."""
     client = get_chroma_client()
+    if client is None:
+        return None
     return client.get_or_create_collection(name="session_summaries")
 
 def search_archived_summaries(query: str) -> str:
     """
     Scans past session summaries using Semantic Search.
+    Returns a no-op message when chromadb is unavailable.
     """
+    if not HAS_CHROMADB:
+        return (
+            f"Vector search unavailable (chromadb not loaded). "
+            f"Cannot search for '{query}'. Use read_archived_history with a specific session name instead."
+        )
+
     collection = get_session_summary_collection()
-    
+
     try:
         results = collection.query(
             query_texts=[query],
             n_results=3
         )
-        
+
         if not results['documents'] or not results['documents'][0]:
             return f"No mentions of '{query}' found in past session summaries."
-            
+
         output = ["Found semantically relevant past summaries:\n"]
         for idx, doc in enumerate(results['documents'][0]):
             meta = results['metadatas'][0][idx]
             session_name = meta.get("session_name", "Unknown Session")
             output.append(f"- **{session_name}**: ...{doc}...")
-            
+
         return "\n".join(output)
-        
+
     except Exception as e:
          return f"Error querying vector database: {e}"
 
@@ -136,35 +171,37 @@ def save_chat_snapshot(history_data: list):
     with open(path, "w") as f:
         json.dump(clean_history, f, indent=2)
         
-    # Sync with ChromaDB
+    # Sync with ChromaDB (skipped when chromadb is unavailable)
+    if not HAS_CHROMADB:
+        return
     try:
         session_name = os.path.basename(get_current_session_dir())
         collection = get_chat_collection()
-        
-        # In a real heavy app we'd delta check. Here, we can just upsert the last message 
+
+        # In a real heavy app we'd delta check. Here, we can just upsert the last message
         # or bulk upsert the whole array if using a stable ID.
         # Let's bulk upsert using a hash of the content+timestamp as ID
         import hashlib
-        
+
         ids = []
         docs = []
         metadatas = []
-        
+
         for idx, item in enumerate(clean_history):
             role = item.get("role", "unknown")
             parts = item.get("parts", [])
             content = " ".join([str(p) for p in parts]) if isinstance(parts, list) else str(parts)
-            
+
             if len(content.strip()) < 5:
                 continue # Skip trivial empty messages
-                
+
             # Create a stable ID for this exact message in this session
             stable_id = hashlib.md5(f"{session_name}_{idx}_{content[:50]}".encode()).hexdigest()
-            
+
             ids.append(stable_id)
             docs.append(f"{role}: {content}")
             metadatas.append({"session_name": session_name, "role": role})
-            
+
         if ids:
             collection.upsert(
                 ids=ids,

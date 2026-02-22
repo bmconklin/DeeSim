@@ -12,10 +12,14 @@ dependencies = [
     "anthropic>=0.39.0",
     "python-dotenv>=1.0.0",
     "prompt_toolkit>=3.0.0",
-    "chromadb>=1.5.1",
 ]
 
 [project.optional-dependencies]
+# chromadb requires pydantic v1 which is broken on Python 3.14+
+# See: https://github.com/chroma-core/chroma/issues/6356
+vector = [
+    "chromadb>=1.5.1",
+]
 slack = [
     "slack-bolt>=1.18.0",
 ]
